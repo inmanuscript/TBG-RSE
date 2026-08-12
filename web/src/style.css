@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(212, 101, 47, 0.18), transparent 55%),
+    radial-gradient(900px 500px at 100% 0%, rgba(56, 120, 180, 0.12), transparent 50%),
+    linear-gradient(180deg, #0b1016 0%, #121820 40%, #0e1319 100%);
+  color: #e8eef6;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
