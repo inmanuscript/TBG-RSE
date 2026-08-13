@@ -5,6 +5,7 @@
 Self-hosted companion app for *Terraforming Mars*: track resources, production, turns, and generation progress with live sync across devices on your LAN.
 
 Single Go binary with an embedded Vue SPA. No cloud account required.
+<img width="1448" height="1061" alt="image" src="https://github.com/user-attachments/assets/58729c45-3f41-4e7f-9b82-6abd80af7c47" />
 
 > **Unofficial fan project.** *Terraforming Mars* is a trademark of FryxGames / Stronghold Games.  
 > This software is not affiliated with, endorsed by, or associated with the rights holders.  
