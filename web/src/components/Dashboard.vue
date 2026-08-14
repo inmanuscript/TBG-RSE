@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch, onMounted } from 'vue'
-import { Copy, Leaf, Flame, ScrollText, Wifi, WifiOff, SkipForward, Flag, Trophy, Zap, ChevronDown, ChevronUp, X, AlertCircle } from '@lucide/vue'
+import { Copy, Check, Leaf, Flame, ScrollText, Wifi, WifiOff, SkipForward, Flag, Trophy, Zap, ChevronDown, ChevronUp, X, AlertCircle } from '@lucide/vue'
 import ResourceCard from './ResourceCard.vue'
 import OpponentCard from './OpponentCard.vue'
 import VPHelper from './VPHelper.vue'
@@ -78,9 +78,55 @@ const phaseLabel = computed(() => {
 })
 
 const actionsLeft = computed(() => Math.max(0, 2 - (props.state.actions_this_turn || 0)))
+// End Turn and Pass are mutually exclusive server-side (production.go EndTurn/Pass):
+// End Turn requires an action already taken, Pass requires none yet. Only offer
+// the one that would actually succeed instead of showing both and erroring.
+const hasActedThisTurn = computed(() => (props.state.actions_this_turn || 0) >= 1)
 
-function copyCode() {
-  navigator.clipboard?.writeText(props.roomCode)
+const roomCodeCopied = ref(false)
+let roomCodeCopyTimer = null
+
+// navigator.clipboard is only available in secure contexts (HTTPS/localhost) —
+// this app is commonly self-hosted and opened over plain HTTP on a LAN, where
+// that API is simply undefined and writeText() silently no-ops. Fall back to
+// the legacy execCommand copy, which still works over HTTP.
+function legacyCopy(text) {
+  const ta = document.createElement('textarea')
+  ta.value = text
+  ta.style.position = 'fixed'
+  ta.style.opacity = '0'
+  document.body.appendChild(ta)
+  ta.focus()
+  ta.select()
+  let ok = false
+  try {
+    ok = document.execCommand('copy')
+  } catch {
+    ok = false
+  }
+  document.body.removeChild(ta)
+  return ok
+}
+
+async function copyCode() {
+  let ok = false
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(props.roomCode)
+      ok = true
+    }
+  } catch {
+    ok = false
+  }
+  if (!ok) ok = legacyCopy(props.roomCode)
+
+  if (ok) {
+    roomCodeCopied.value = true
+    clearTimeout(roomCodeCopyTimer)
+    roomCodeCopyTimer = setTimeout(() => {
+      roomCodeCopied.value = false
+    }, 1500)
+  }
 }
 
 function isHighlighted(playerId) {
@@ -115,10 +161,12 @@ function onProject(p) {
             <button
               type="button"
               class="inline-flex items-center gap-1 rounded-md border border-surface-border bg-surface px-2 py-1 font-display tracking-widest text-ink hover:border-mars"
+              :class="{ 'border-emerald-600 text-emerald-300': roomCodeCopied }"
               @click="copyCode"
             >
-              <Copy class="h-3 w-3" />
-              {{ roomCode }}
+              <Check v-if="roomCodeCopied" class="h-3 w-3" />
+              <Copy v-else class="h-3 w-3" />
+              {{ roomCodeCopied ? 'コピーしました' : roomCode }}
             </button>
             <span>{{ phaseLabel }}</span>
             <span class="inline-flex items-center gap-1">
@@ -179,7 +227,7 @@ function onProject(p) {
               アクション実施
             </button>
             <button
-              v-if="isMyTurn"
+              v-if="isMyTurn && hasActedThisTurn"
               type="button"
               class="inline-flex items-center gap-1 rounded-lg bg-surface-border px-3 py-2 text-sm hover:bg-mars"
               @click="$emit('end-turn')"
@@ -188,7 +236,7 @@ function onProject(p) {
               ターン終了
             </button>
             <button
-              v-if="isMyTurn"
+              v-if="isMyTurn && !hasActedThisTurn"
               type="button"
               class="inline-flex items-center gap-1 rounded-lg border border-red-800/50 bg-red-950/40 px-3 py-2 text-sm text-red-200"
               @click="$emit('pass')"
