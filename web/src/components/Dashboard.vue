@@ -1,6 +1,6 @@
 <script setup>
-import { computed, ref } from 'vue'
-import { Copy, Leaf, Flame, ScrollText, Wifi, WifiOff, SkipForward, Flag, Trophy, Zap } from '@lucide/vue'
+import { computed, ref, onMounted } from 'vue'
+import { Copy, Leaf, Flame, ScrollText, Wifi, WifiOff, SkipForward, Flag, Trophy, Zap, ChevronDown, ChevronUp } from '@lucide/vue'
 import ResourceCard from './ResourceCard.vue'
 import OpponentCard from './OpponentCard.vue'
 import VPHelper from './VPHelper.vue'
@@ -32,6 +32,17 @@ const emit = defineEmits([
 
 const cardBuy = ref(0)
 const sellCount = ref(1)
+const tagsExpanded = ref(false)
+
+onMounted(() => {
+  tagsExpanded.value = window.matchMedia('(min-width: 640px)').matches
+})
+
+const tagSummary = computed(() =>
+  props.tags
+    .filter((t) => (props.me.tags?.[t] || 0) > 0)
+    .map((t) => `${t} ${props.me.tags[t]}`),
+)
 
 const phaseLabel = computed(() => {
   switch (props.state.phase) {
@@ -310,12 +321,27 @@ function onProject(p) {
         </div>
 
         <div class="mb-4 rounded-2xl border border-surface-border bg-surface-raised/70 p-4">
-          <h3 class="mb-2 font-display text-xs tracking-wide text-ink-muted">Tags</h3>
-          <div class="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
-            <div v-for="tag in tags" :key="tag" class="rounded-lg bg-surface px-2 py-2 text-center">
-              <p class="text-[10px] text-ink-muted">{{ tag }}</p>
-              <p class="font-display text-lg tabular-nums">{{ me.tags?.[tag] || 0 }}</p>
-              <div class="mt-1 flex justify-center gap-1">
+          <button
+            type="button"
+            class="flex w-full items-start justify-between gap-3 text-left"
+            :aria-expanded="tagsExpanded"
+            @click="tagsExpanded = !tagsExpanded"
+          >
+            <div class="min-w-0">
+              <h3 class="font-display text-xs tracking-wide text-ink-muted">Tags</h3>
+              <p v-if="!tagsExpanded && tagSummary.length" class="mt-1 truncate text-xs text-ink">
+                {{ tagSummary.join(' · ') }}
+              </p>
+              <p v-else-if="!tagsExpanded" class="mt-1 text-xs text-ink-muted">タップで展開</p>
+            </div>
+            <ChevronDown v-if="!tagsExpanded" class="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" />
+            <ChevronUp v-else class="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" />
+          </button>
+          <div v-show="tagsExpanded" class="mt-3 grid grid-cols-4 gap-1.5 sm:grid-cols-4 sm:gap-2 md:grid-cols-6">
+            <div v-for="tag in tags" :key="tag" class="rounded-lg bg-surface px-1.5 py-1.5 text-center sm:px-2 sm:py-2">
+              <p class="truncate text-[9px] text-ink-muted sm:text-[10px]">{{ tag }}</p>
+              <p class="font-display text-base tabular-nums sm:text-lg">{{ me.tags?.[tag] || 0 }}</p>
+              <div class="mt-0.5 flex justify-center gap-1 sm:mt-1">
                 <button type="button" class="rounded bg-surface-border px-1.5 text-xs" @click="$emit('tag', { tag, delta: -1 })">−</button>
                 <button type="button" class="rounded bg-surface-border px-1.5 text-xs" @click="$emit('tag', { tag, delta: 1 })">+</button>
               </div>
