@@ -228,7 +228,7 @@ func (m *Manager) handleAction(client *Client, msg inboundMessage) error {
 			if r.State.Phase != game.PhaseResearch {
 				return fmt.Errorf("not in research phase")
 			}
-			detail, auditDelta, err := game.BuyCards(pl, p.Count)
+			detail, auditDelta, err := game.BuyCards(pl, p.Count, r.State.Generation)
 			if err != nil {
 				return err
 			}

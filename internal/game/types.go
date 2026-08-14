@@ -28,16 +28,27 @@ func AllowNewJoin(state *GameState) bool {
 }
 
 const (
-	InitialTR         = 20
-	InitialGeneration = 1
-	MCProductionMin   = -5
-	AuditLogLimit     = 200
-	ShortcutCost      = 8
-	MaxActionsPerTurn = 2
-	CardBuyCost       = 3
-	MaxCardsBuy       = 4
-	MaxSeats          = 5
+	InitialTR           = 20
+	InitialGeneration   = 1
+	MCProductionMin     = -5
+	AuditLogLimit       = 200
+	ShortcutCost        = 8
+	MaxActionsPerTurn   = 2
+	CardBuyCost         = 3
+	MaxCardsBuy         = 4
+	MaxCardsBuyFirstGen = 10
+	MaxSeats            = 5
 )
+
+// MaxCardsBuyForGeneration returns the research card-buy cap for the given
+// generation. Generation 1 deals a larger starting hand (10 cards); every
+// later generation deals 4.
+func MaxCardsBuyForGeneration(generation int) int {
+	if generation <= InitialGeneration {
+		return MaxCardsBuyFirstGen
+	}
+	return MaxCardsBuy
+}
 
 // Common TM tags (manual counters).
 var AllTags = []string{

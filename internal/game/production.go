@@ -2,16 +2,18 @@ package game
 
 import "fmt"
 
-// BuyCards spends 3 MC per card during RESEARCH phase.
-func BuyCards(p *PlayerState, count int) (detail string, auditDelta map[string]int, err error) {
+// BuyCards spends 3 MC per card during RESEARCH phase. The cap depends on
+// generation — generation 1 deals a larger starting hand than later ones.
+func BuyCards(p *PlayerState, count int, generation int) (detail string, auditDelta map[string]int, err error) {
 	if p == nil {
 		return "", nil, fmt.Errorf("player is nil")
 	}
 	if p.ResearchDone {
 		return "", nil, fmt.Errorf("already finished research")
 	}
-	if count < 0 || count > MaxCardsBuy {
-		return "", nil, fmt.Errorf("card buy count must be 0–%d", MaxCardsBuy)
+	max := MaxCardsBuyForGeneration(generation)
+	if count < 0 || count > max {
+		return "", nil, fmt.Errorf("card buy count must be 0–%d", max)
 	}
 	cost := count * CardBuyCost
 	if cost > 0 {

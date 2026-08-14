@@ -229,7 +229,7 @@ func TestBuyCardsAndFinishResearch(t *testing.T) {
 	a := NewPlayer("a", "A", "#1", 1)
 	a.Resources[MC] = ResourceState{Stock: 12}
 	state.Players["a"] = a
-	_, _, err := BuyCards(a, 4)
+	_, _, err := BuyCards(a, 4, state.Generation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,6 +241,31 @@ func TestBuyCardsAndFinishResearch(t *testing.T) {
 	}
 	if state.Phase != PhaseAction {
 		t.Fatalf("phase=%s", state.Phase)
+	}
+}
+
+func TestBuyCardsGenerationCap(t *testing.T) {
+	a := NewPlayer("a", "A", "#1", 1)
+	a.Resources[MC] = ResourceState{Stock: 100}
+
+	// Generation 1 deals a larger starting hand — up to 10 may be bought.
+	if _, _, err := BuyCards(a, 10, 1); err != nil {
+		t.Fatalf("gen1 buy 10: %v", err)
+	}
+	if _, _, err := BuyCards(a, 11, 1); err == nil {
+		t.Fatal("gen1 buy 11 should fail")
+	}
+
+	// Later generations cap at 4.
+	b := NewPlayer("b", "B", "#2", 2)
+	b.Resources[MC] = ResourceState{Stock: 100}
+	if _, _, err := BuyCards(b, 4, 2); err != nil {
+		t.Fatalf("gen2 buy 4: %v", err)
+	}
+	c := NewPlayer("c", "C", "#3", 3)
+	c.Resources[MC] = ResourceState{Stock: 100}
+	if _, _, err := BuyCards(c, 5, 2); err == nil {
+		t.Fatal("gen2 buy 5 should fail")
 	}
 }
 

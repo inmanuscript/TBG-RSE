@@ -1,10 +1,11 @@
 <script setup>
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
 import { Copy, Leaf, Flame, ScrollText, Wifi, WifiOff, SkipForward, Flag, Trophy, Zap, ChevronDown, ChevronUp } from '@lucide/vue'
 import ResourceCard from './ResourceCard.vue'
 import OpponentCard from './OpponentCard.vue'
 import VPHelper from './VPHelper.vue'
 import RepeatPressButton from './RepeatPressButton.vue'
+import CountKeypad from './CountKeypad.vue'
 
 const props = defineProps({
   state: { type: Object, required: true },
@@ -32,12 +33,29 @@ const emit = defineEmits([
 ])
 
 const cardBuy = ref(0)
+const cardBuyKeypadOpen = ref(false)
 const sellCount = ref(1)
 const tagsExpanded = ref(false)
 
 onMounted(() => {
   tagsExpanded.value = window.matchMedia('(min-width: 640px)').matches
 })
+
+// Generation 1 deals a larger starting hand (up to 10); later generations cap at 4.
+// Mirrors game.MaxCardsBuyForGeneration on the server.
+const maxCardsBuy = computed(() => (props.state.generation <= 1 ? 10 : 4))
+const cardBuyOptions = computed(() => Array.from({ length: maxCardsBuy.value + 1 }, (_, i) => i))
+// A pill per value reads fine up to ~5 options; beyond that a keypad stays compact.
+const useCardBuyKeypad = computed(() => maxCardsBuy.value > 5)
+
+watch(maxCardsBuy, (max) => {
+  if (cardBuy.value > max) cardBuy.value = max
+})
+
+function submitCardBuyKeypad(value) {
+  cardBuy.value = value
+  cardBuyKeypadOpen.value = false
+}
 
 const tagSummary = computed(() =>
   props.tags
@@ -210,11 +228,22 @@ function onProject(p) {
       class="mb-4 rounded-2xl border border-cyan-900/40 bg-cyan-950/20 p-4"
     >
       <h2 class="font-display text-sm tracking-wide text-cyan-200">研究フェイズ — カード購入</h2>
-      <p class="mt-1 text-sm text-ink-muted">4枚ドロー想定。3 MC / 枚。</p>
+      <p class="mt-1 text-sm text-ink-muted">
+        {{ useCardBuyKeypad ? '初期手札10枚想定。' : '4枚ドロー想定。' }}3 MC / 枚。
+      </p>
       <div v-if="!me.research_done" class="mt-3 flex flex-wrap items-center gap-3">
-        <div class="flex gap-1.5" role="radiogroup" aria-label="購入枚数">
+        <button
+          v-if="useCardBuyKeypad"
+          type="button"
+          class="rounded-lg border border-surface-border bg-surface px-4 py-1.5 font-display text-xl font-bold tabular-nums hover:border-cyan-500"
+          title="タップして購入枚数を入力"
+          @click="cardBuyKeypadOpen = true"
+        >
+          {{ cardBuy }}
+        </button>
+        <div v-else class="flex gap-1.5" role="radiogroup" aria-label="購入枚数">
           <button
-            v-for="n in [0, 1, 2, 3, 4]"
+            v-for="n in cardBuyOptions"
             :key="n"
             type="button"
             role="radio"
@@ -234,6 +263,15 @@ function onProject(p) {
         >
           購入確定
         </button>
+
+        <CountKeypad
+          v-if="cardBuyKeypadOpen"
+          title="購入枚数"
+          :min="0"
+          :max="maxCardsBuy"
+          @submit="submitCardBuyKeypad"
+          @cancel="cardBuyKeypadOpen = false"
+        />
       </div>
       <p v-else class="mt-3 text-sm text-emerald-300">購入済み — 他プレイヤー待ち</p>
       <ul class="mt-3 flex flex-wrap gap-2 text-xs">
