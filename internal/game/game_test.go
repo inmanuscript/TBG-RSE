@@ -96,6 +96,43 @@ func TestExecuteProductionOrder(t *testing.T) {
 	}
 }
 
+func TestAbsentPlayerDuringAction(t *testing.T) {
+	state := NewGameState("R")
+	a := NewPlayer("a", "A", "#1", 1)
+	b := NewPlayer("b", "B", "#2", 2)
+	state.Players["a"] = a
+	state.Players["b"] = b
+	StartActionPhase(&state)
+
+	if state.ActivePlayerID != "a" {
+		t.Fatalf("active=%s", state.ActivePlayerID)
+	}
+	detail, ok := AbsentPlayer(&state, "a")
+	if !ok || detail == "" {
+		t.Fatalf("absent a ok=%v detail=%q", ok, detail)
+	}
+	if !a.Passed || state.ActivePlayerID != "b" {
+		t.Fatalf("after absent a: passed=%v active=%s", a.Passed, state.ActivePlayerID)
+	}
+}
+
+func TestAbsentPlayerDuringResearch(t *testing.T) {
+	state := NewGameState("R")
+	a := NewPlayer("a", "A", "#1", 1)
+	b := NewPlayer("b", "B", "#2", 2)
+	b.ResearchDone = true
+	state.Players["a"] = a
+	state.Players["b"] = b
+
+	detail, ok := AbsentPlayer(&state, "a")
+	if !ok {
+		t.Fatal("expected absent")
+	}
+	if state.Phase != PhaseAction {
+		t.Fatalf("phase=%s detail=%q", state.Phase, detail)
+	}
+}
+
 func TestTurnPassAndActions(t *testing.T) {
 	state := NewGameState("ROOM")
 	a := NewPlayer("a", "A", "#1", 1)
@@ -168,6 +205,22 @@ func TestRebuildTurnOrderBySeat(t *testing.T) {
 	}
 	if err := ValidateSeat(&state, 4, ""); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestAllowNewJoin(t *testing.T) {
+	state := NewGameState("R")
+	if !AllowNewJoin(&state) {
+		t.Fatal("generation 1 research should allow new join")
+	}
+	state.Phase = PhaseAction
+	if AllowNewJoin(&state) {
+		t.Fatal("action phase should not allow new join")
+	}
+	state.Phase = PhaseResearch
+	state.Generation = 2
+	if AllowNewJoin(&state) {
+		t.Fatal("generation 2 research should not allow new join")
 	}
 }
 

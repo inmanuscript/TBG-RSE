@@ -2,7 +2,18 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    {
+      name: 'cache-bust-assets',
+      transformIndexHtml(html) {
+        const v = Date.now()
+        return html
+          .replace('/assets/index.js', `/assets/index.js?v=${v}`)
+          .replace('/assets/index.css', `/assets/index.css?v=${v}`)
+      },
+    },
+  ],
   build: {
     outDir: '../webui/dist',
     emptyOutDir: true,

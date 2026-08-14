@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -120,10 +122,39 @@ func (m *Manager) detachClient(c *Client) {
 	if c.room == nil {
 		return
 	}
-	c.room.mu.Lock()
-	delete(c.room.clients, c)
-	c.room.mu.Unlock()
+	r := c.room
+	playerID := c.playerID
+	r.mu.Lock()
+	delete(r.clients, c)
+	r.mu.Unlock()
 	c.room = nil
+	if playerID != "" {
+		m.handlePlayerDisconnect(r, playerID)
+	}
+}
+
+func (m *Manager) handlePlayerDisconnect(r *Room, playerID string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.isPlayerOnline(playerID) {
+		return
+	}
+	detail, ok := game.AbsentPlayer(&r.State, playerID)
+	if !ok {
+		return
+	}
+	r.appendAuditLocked(playerID, "DISCONNECT", detail, nil)
+	m.persistLocked(r)
+	state := game.CloneGameState(r.State)
+	r.broadcastAllLocked(outboundMessage{Event: "STATE_UPDATE", Payload: state})
+	r.broadcastAllLocked(outboundMessage{
+		Event: "NOTIFICATION",
+		Payload: map[string]string{
+			"player_name": "System",
+			"message":     detail,
+			"timestamp":   time.Now().Format("15:04:05"),
+		},
+	})
 }
 
 func (m *Manager) handleAction(client *Client, msg inboundMessage) error {
@@ -140,15 +171,16 @@ func (m *Manager) handleAction(client *Client, msg inboundMessage) error {
 		return m.createRoom(client, p.Name, p.Color, p.Seat)
 	case "JOIN_ROOM":
 		var p struct {
-			RoomCode string `json:"room_code"`
-			Name     string `json:"name"`
-			Color    string `json:"color"`
-			Seat     int    `json:"seat"`
+			RoomCode        string `json:"room_code"`
+			Name            string `json:"name"`
+			Color           string `json:"color"`
+			Seat            int    `json:"seat"`
+			ReclaimPlayerID string `json:"reclaim_player_id"`
 		}
 		if err := json.Unmarshal(msg.Payload, &p); err != nil {
 			return fmt.Errorf("invalid payload")
 		}
-		return m.joinRoom(client, p.RoomCode, p.Name, p.Color, p.Seat)
+		return m.joinRoom(client, p.RoomCode, p.Name, p.Color, p.Seat, p.ReclaimPlayerID)
 	case "RECONNECT":
 		var p struct {
 			RoomCode       string `json:"room_code"`
@@ -444,12 +476,18 @@ func (m *Manager) createRoom(client *Client, name, color string, seat int) error
 	return client.sendJoined(r, playerID, token)
 }
 
-func (m *Manager) joinRoom(client *Client, code, name, color string, seat int) error {
-	if name == "" {
-		return fmt.Errorf("name required")
+func (r *Room) isPlayerOnline(playerID string) bool {
+	for c := range r.clients {
+		if c.playerID == playerID {
+			return true
+		}
 	}
-	if color == "" {
-		color = "#55AAFF"
+	return false
+}
+
+func (m *Manager) joinRoom(client *Client, code, name, color string, seat int, reclaimPlayerID string) error {
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("name required")
 	}
 	m.mu.Lock()
 	r := m.rooms[normalizeCode(code)]
@@ -457,18 +495,31 @@ func (m *Manager) joinRoom(client *Client, code, name, color string, seat int) e
 	if r == nil {
 		return fmt.Errorf("room not found")
 	}
+	if reclaimPlayerID != "" {
+		return m.reclaimSeat(client, r, reclaimPlayerID, name)
+	}
+	return m.joinRoomNew(client, r, name, color, seat)
+}
+
+func (m *Manager) joinRoomNew(client *Client, r *Room, name, color string, seat int) error {
+	if color == "" {
+		color = "#55AAFF"
+	}
 
 	r.mu.Lock()
 	if r.State.Phase == game.PhaseEnded {
 		r.mu.Unlock()
 		return fmt.Errorf("game already ended")
 	}
+	if !game.AllowNewJoin(&r.State) {
+		r.mu.Unlock()
+		return fmt.Errorf("game already started; reclaim an offline seat")
+	}
 	if game.ColorInUse(&r.State, color, "") {
 		r.mu.Unlock()
 		return fmt.Errorf("color already taken")
 	}
 	if seat == 0 {
-		// assign first free seat
 		taken := map[int]bool{}
 		for _, p := range r.State.Players {
 			taken[p.Seat] = true
@@ -500,6 +551,40 @@ func (m *Manager) joinRoom(client *Client, code, name, color string, seat int) e
 	return nil
 }
 
+func (m *Manager) reclaimSeat(client *Client, r *Room, reclaimPlayerID, name string) error {
+	r.mu.Lock()
+	if r.State.Phase == game.PhaseEnded {
+		r.mu.Unlock()
+		return fmt.Errorf("game already ended")
+	}
+	pl, ok := r.State.Players[reclaimPlayerID]
+	if !ok {
+		r.mu.Unlock()
+		return fmt.Errorf("player not found")
+	}
+	if r.isPlayerOnline(reclaimPlayerID) {
+		r.mu.Unlock()
+		return fmt.Errorf("player is already online")
+	}
+	if strings.TrimSpace(name) != strings.TrimSpace(pl.Name) {
+		r.mu.Unlock()
+		return fmt.Errorf("name does not match seat owner")
+	}
+	token := randomToken()
+	r.tokens[reclaimPlayerID] = token
+	seat := pl.Seat
+	displayName := pl.Name
+	r.mu.Unlock()
+
+	m.attach(client, r, reclaimPlayerID)
+	m.persist(r)
+	if err := client.sendJoined(r, reclaimPlayerID, token); err != nil {
+		return err
+	}
+	r.broadcastStateAndNotify(displayName, fmt.Sprintf("%s reconnected (seat %d)", displayName, seat), reclaimPlayerID)
+	return nil
+}
+
 func (m *Manager) peekRoom(client *Client, code string) error {
 	m.mu.Lock()
 	r := m.rooms[normalizeCode(code)]
@@ -521,16 +606,34 @@ func (m *Manager) peekRoom(client *Client, code string) error {
 	takenSeats := game.TakenSeats(&r.State)
 	count := len(r.State.Players)
 	phase := r.State.Phase
+	generation := r.State.Generation
+	allowNewJoin := game.AllowNewJoin(&r.State)
+	players := make([]map[string]any, 0, count)
+	for _, p := range r.State.Players {
+		players = append(players, map[string]any{
+			"id":     p.ID,
+			"name":   p.Name,
+			"seat":   p.Seat,
+			"color":  p.Color,
+			"online": r.isPlayerOnline(p.ID),
+		})
+	}
 	r.mu.Unlock()
+	sort.Slice(players, func(i, j int) bool {
+		return players[i]["seat"].(int) < players[j]["seat"].(int)
+	})
 	return client.send(outboundMessage{
 		Event: "ROOM_INFO",
 		Payload: map[string]any{
-			"room_code":    normalizeCode(code),
-			"found":        true,
-			"taken_colors": takenColors,
-			"taken_seats":  takenSeats,
-			"player_count": count,
-			"phase":        phase,
+			"room_code":      normalizeCode(code),
+			"found":          true,
+			"taken_colors":   takenColors,
+			"taken_seats":    takenSeats,
+			"player_count":   count,
+			"phase":          phase,
+			"generation":     generation,
+			"allow_new_join": allowNewJoin,
+			"players":        players,
 		},
 	})
 }
@@ -560,11 +663,22 @@ func (m *Manager) reconnect(client *Client, code, playerID, token string) error 
 
 func (m *Manager) attach(client *Client, r *Room, playerID string) {
 	m.detachClient(client)
+	var stale []*Client
 	r.mu.Lock()
+	for c := range r.clients {
+		if c.playerID == playerID && c != client {
+			stale = append(stale, c)
+			delete(r.clients, c)
+			c.room = nil
+		}
+	}
 	client.room = r
 	client.playerID = playerID
 	r.clients[client] = struct{}{}
 	r.mu.Unlock()
+	for _, c := range stale {
+		_ = c.conn.Close(websocket.StatusNormalClosure, "replaced")
+	}
 }
 
 func (m *Manager) persist(r *Room) {

@@ -224,6 +224,48 @@ func Pass(state *GameState, playerID string) (allPassed bool, err error) {
 	return AllPassed(state), nil
 }
 
+// AbsentPlayer marks a disconnected player out for the current phase.
+func AbsentPlayer(state *GameState, playerID string) (detail string, ok bool) {
+	if state == nil {
+		return "", false
+	}
+	p, exists := state.Players[playerID]
+	if !exists || p == nil {
+		return "", false
+	}
+	switch state.Phase {
+	case PhaseResearch:
+		if p.ResearchDone {
+			return "", false
+		}
+		p.ResearchDone = true
+		detail = fmt.Sprintf("%s disconnected → research skipped", p.Name)
+		if MaybeFinishResearch(state) {
+			detail += " → Action phase"
+		}
+		return detail, true
+	case PhaseAction:
+		if p.Passed {
+			return "", false
+		}
+		p.Passed = true
+		detail = fmt.Sprintf("%s disconnected → passed (out this generation)", p.Name)
+		AdvanceTurn(state)
+		if state.Phase == PhaseProductionWait {
+			detail += " — all passed, confirm production"
+		}
+		return detail, true
+	case PhaseProductionWait:
+		if p.IsReady {
+			return "", false
+		}
+		p.IsReady = true
+		return fmt.Sprintf("%s disconnected → ready for production", p.Name), true
+	default:
+		return "", false
+	}
+}
+
 func AllPassed(state *GameState) bool {
 	if len(state.Players) == 0 {
 		return false

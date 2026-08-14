@@ -77,6 +77,11 @@ function onProject(p) {
 
 <template>
   <div class="mx-auto min-h-screen max-w-7xl px-3 pb-10 pt-3 sm:px-5">
+    <p v-if="error" class="mb-4 rounded-lg bg-red-950/50 px-3 py-2 text-sm text-red-300">{{ error }}</p>
+    <p v-else-if="!connected" class="mb-4 rounded-lg bg-amber-950/50 px-3 py-2 text-sm text-amber-200">
+      サーバーに再接続中です。オンラインになるまで操作できません。
+    </p>
+
     <header class="mb-4 rounded-2xl border border-surface-border bg-surface-raised/80 p-4 backdrop-blur">
       <div class="flex flex-wrap items-center gap-3 justify-between">
         <div>
@@ -267,6 +272,7 @@ function onProject(p) {
                 v-for="d in [-10, -1, 1, 10]"
                 :key="'tr' + d"
                 class="rounded-lg bg-surface px-3 py-2 text-sm font-semibold hover:bg-surface-border"
+                :disabled="!connected"
                 @press="$emit('update', { target: 'tr', delta: d })"
               >
                 {{ d > 0 ? '+' : '' }}{{ d }}
@@ -344,12 +350,14 @@ function onProject(p) {
               <div class="mt-0.5 flex justify-center gap-1 sm:mt-1">
                 <RepeatPressButton
                   class="rounded bg-surface-border px-1.5 text-xs"
+                  :disabled="!connected"
                   @press="$emit('tag', { tag, delta: -1 })"
                 >
                   −
                 </RepeatPressButton>
                 <RepeatPressButton
                   class="rounded bg-surface-border px-1.5 text-xs"
+                  :disabled="!connected"
                   @press="$emit('tag', { tag, delta: 1 })"
                 >
                   +
@@ -367,6 +375,7 @@ function onProject(p) {
             :meta="resourceMeta[key]"
             :stock="me.resources?.[key]?.stock ?? 0"
             :production="me.resources?.[key]?.production ?? 0"
+            :interactive="connected"
             @change="(p) => $emit('update', p)"
           />
         </div>

@@ -135,6 +135,10 @@ function clearSession() {
   localStorage.removeItem(STORAGE_KEY)
 }
 
+function isSessionFatalError(message) {
+  return /invalid reconnect token|not in a room|player not found/i.test(message || '')
+}
+
 function wsURL() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
   return `${proto}//${location.host}/ws`
@@ -171,6 +175,8 @@ export function useGame() {
 
   const takenColors = ref([])
   const takenSeats = ref([])
+  const roomPlayers = ref([])
+  const allowNewJoin = ref(true)
 
   let ws = null
   let toastSeq = 0
@@ -201,9 +207,26 @@ export function useGame() {
     return order.map((id) => state.value.players[id]).filter(Boolean)
   })
 
+  function resetGameState({ keepError = false } = {}) {
+    const err = keepError ? error.value : ''
+    clearSession()
+    roomCode.value = ''
+    playerId.value = ''
+    hostPlayerId.value = ''
+    reconnectToken.value = ''
+    state.value = null
+    lobbyPending.value = false
+    takenColors.value = []
+    takenSeats.value = []
+    roomPlayers.value = []
+    allowNewJoin.value = true
+    error.value = err
+  }
+
   function send(action, payload = {}) {
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       error.value = 'Not connected'
+      if (state.value && !intentionalClose) scheduleReconnect()
       return
     }
     ws.send(JSON.stringify({ action, payload }))
@@ -297,17 +320,26 @@ export function useGame() {
         const p = msg.payload || {}
         takenColors.value = Array.isArray(p.taken_colors) ? p.taken_colors : []
         takenSeats.value = Array.isArray(p.taken_seats) ? p.taken_seats : []
+        roomPlayers.value = Array.isArray(p.players) ? p.players : []
+        allowNewJoin.value = p.allow_new_join !== false
         if (p.found === false) {
           error.value = 'room not found'
+          roomPlayers.value = []
+          allowNewJoin.value = true
         } else if (!state.value) {
           error.value = ''
         }
         break
       }
       case 'ERROR': {
-        error.value = msg.payload?.message || 'Error'
+        const message = msg.payload?.message || 'Error'
+        error.value = message
         lobbyPending.value = false
-        if (!state.value) clearSession()
+        if (isSessionFatalError(message)) {
+          resetGameState({ keepError: true })
+        } else if (!state.value) {
+          clearSession()
+        }
         break
       }
       default:
@@ -379,7 +411,7 @@ export function useGame() {
           reconnect_token: session.reconnect_token,
         })
       })
-    }, 1200)
+    }, 400)
   }
 
   function createRoom(name, color, seat = 1) {
@@ -387,9 +419,11 @@ export function useGame() {
     connect(() => send('CREATE_ROOM', { name, color, seat }))
   }
 
-  function joinRoom(code, name, color, seat = 0) {
+  function joinRoom(code, name, color, seat = 0, reclaimPlayerId = '') {
     lobbyPending.value = true
-    connect(() => send('JOIN_ROOM', { room_code: code, name, color, seat }))
+    const payload = { room_code: code, name, color, seat }
+    if (reclaimPlayerId) payload.reclaim_player_id = reclaimPlayerId
+    connect(() => send('JOIN_ROOM', payload))
   }
 
   function peekRoom(code) {
@@ -397,6 +431,8 @@ export function useGame() {
     if (normalized.length < 4) {
       takenColors.value = []
       takenSeats.value = []
+      roomPlayers.value = []
+      allowNewJoin.value = true
       return
     }
     const doPeek = () => send('PEEK_ROOM', { room_code: normalized })
@@ -428,15 +464,7 @@ export function useGame() {
       clearTimeout(reconnectTimer)
       reconnectTimer = null
     }
-    clearSession()
-    roomCode.value = ''
-    playerId.value = ''
-    hostPlayerId.value = ''
-    reconnectToken.value = ''
-    state.value = null
-    lobbyPending.value = false
-    takenColors.value = []
-    takenSeats.value = []
+    resetGameState()
     if (ws) {
       ws.onclose = null
       ws.close()
@@ -482,6 +510,8 @@ export function useGame() {
     lastHighlight,
     takenColors,
     takenSeats,
+    roomPlayers,
+    allowNewJoin,
     createRoom,
     joinRoom,
     peekRoom,

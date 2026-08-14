@@ -5,11 +5,19 @@ const emit = defineEmits(['press'])
 
 defineOptions({ inheritAttrs: false })
 
-const handlers = useRepeatPress(() => emit('press'))
+const { onPointerDown, onPointerUp, onClick } = useRepeatPress(() => emit('press'))
 </script>
 
 <template>
-  <button type="button" v-bind="$attrs" v-on="handlers">
+  <button
+    type="button"
+    v-bind="$attrs"
+    @pointerdown="onPointerDown"
+    @pointerup="onPointerUp"
+    @pointerleave="onPointerUp"
+    @pointercancel="onPointerUp"
+    @click="onClick"
+  >
     <slot />
   </button>
 </template>

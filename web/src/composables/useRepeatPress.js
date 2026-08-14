@@ -56,11 +56,5 @@ export function useRepeatPress(onRepeat) {
 
   onUnmounted(clearTimers)
 
-  return {
-    onPointerdown: onPointerDown,
-    onPointerup: onPointerUp,
-    onPointerleave: onPointerUp,
-    onPointercancel: onPointerUp,
-    onClick,
-  }
+  return { onPointerDown, onPointerUp, onClick }
 }

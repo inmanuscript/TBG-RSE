@@ -16,11 +16,16 @@ const (
 var AllResources = []ResourceType{MC, Steel, Titanium, Plant, Energy, Heat}
 
 const (
-	PhaseResearch        = "RESEARCH"
-	PhaseAction          = "ACTION"
-	PhaseProductionWait  = "PRODUCTION_WAIT"
-	PhaseEnded           = "ENDED"
+	PhaseResearch       = "RESEARCH"
+	PhaseAction         = "ACTION"
+	PhaseProductionWait = "PRODUCTION_WAIT"
+	PhaseEnded          = "ENDED"
 )
+
+// AllowNewJoin reports whether a brand-new player may join the room.
+func AllowNewJoin(state *GameState) bool {
+	return state != nil && state.Phase == PhaseResearch && state.Generation == 1
+}
 
 const (
 	InitialTR         = 20

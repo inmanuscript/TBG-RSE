@@ -34,6 +34,8 @@ const {
   lastHighlight,
   takenColors,
   takenSeats,
+  roomPlayers,
+  allowNewJoin,
   createRoom,
   joinRoom,
   peekRoom,
@@ -60,8 +62,8 @@ function onCreate({ name, color, seat }) {
   createRoom(name, color, seat)
 }
 
-function onJoin({ name, color, seat, roomCode: code }) {
-  joinRoom(code, name, color, seat)
+function onJoin({ name, color, seat, roomCode: code, reclaimPlayerId }) {
+  joinRoom(code, name, color, seat, reclaimPlayerId || '')
 }
 
 function onUpdate(payload) {
@@ -132,6 +134,8 @@ function onEndGame() {
     :seats="SEATS"
     :taken-colors="takenColors"
     :taken-seats="takenSeats"
+    :room-players="roomPlayers"
+    :allow-new-join="allowNewJoin"
     :error="error"
     :connecting="lobbyPending"
     @create="onCreate"

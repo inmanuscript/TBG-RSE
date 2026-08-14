@@ -6,6 +6,7 @@ const props = defineProps({
   meta: { type: Object, required: true },
   stock: { type: Number, required: true },
   production: { type: Number, required: true },
+  interactive: { type: Boolean, default: true },
 })
 
 const emit = defineEmits(['change'])
@@ -35,6 +36,7 @@ function bump(target, delta) {
             v-for="d in [-10, -1, 1, 10]"
             :key="'s' + d"
             class="rounded-md bg-surface px-1 py-1.5 text-xs font-semibold text-ink hover:bg-surface-border"
+            :disabled="!interactive"
             @press="bump('stock', d)"
           >
             {{ d > 0 ? '+' : '' }}{{ d }}
@@ -51,6 +53,7 @@ function bump(target, delta) {
             v-for="d in [-10, -1, 1, 10]"
             :key="'p' + d"
             class="rounded-md bg-surface px-1 py-1.5 text-xs font-semibold text-ink hover:bg-surface-border"
+            :disabled="!interactive"
             @press="bump('production', d)"
           >
             {{ d > 0 ? '+' : '' }}{{ d }}
