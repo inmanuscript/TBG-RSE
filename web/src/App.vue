@@ -92,6 +92,9 @@ function onEndGame() {
   <ActivityLog
     :open="activityOpen"
     :items="activity"
+    :players="orderedPlayers"
+    :resource-meta="RESOURCE_META"
+    :my-player-id="playerId"
     @close="activityOpen = false"
   />
 

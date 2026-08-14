@@ -232,13 +232,41 @@ export function useGame() {
     ws.send(JSON.stringify({ action, payload }))
   }
 
-  function pushToast(playerName, message, timestamp) {
+  function pushActivity(playerName, message, timestamp, parsed) {
+    const id = ++toastSeq
+    activity.value = [
+      {
+        id,
+        playerName,
+        message,
+        timestamp,
+        kind: parsed?.kind ?? null,
+        resource: parsed?.resource ?? null,
+        target: parsed?.target ?? null,
+        tag: parsed?.tag ?? null,
+        field: parsed?.field ?? null,
+        delta: parsed?.delta ?? null,
+        finalValue: parsed?.finalValue ?? null,
+      },
+      ...activity.value,
+    ].slice(0, 100)
+  }
+
+  function showToast(playerName, message, timestamp) {
     const id = ++toastSeq
     toasts.value = [{ id, playerName, message, timestamp }, ...toasts.value].slice(0, 5)
-    activity.value = [{ id, playerName, message, timestamp }, ...activity.value].slice(0, 100)
     setTimeout(() => {
       toasts.value = toasts.value.filter((t) => t.id !== id)
     }, 4200)
+  }
+
+  // Records every notification to the activity log (self included); only pops a
+  // toast for other players' actions since you already know what you just did.
+  function recordNotification(playerName, message, timestamp, parsed) {
+    pushActivity(playerName, message, timestamp, parsed)
+    if (!isOwnNotification(playerName)) {
+      showToast(playerName, message, timestamp)
+    }
   }
 
   function flushNotificationBatch(batchKey) {
@@ -248,7 +276,17 @@ export function useGame() {
     pendingNotifications.delete(batchKey)
     if (entry.netDelta === 0) return
     const message = formatBatchMessage(entry, state.value?.players)
-    if (message) pushToast(entry.playerName, message, entry.timestamp)
+    if (message) {
+      recordNotification(entry.playerName, message, entry.timestamp, {
+        kind: entry.kind,
+        resource: entry.resource,
+        target: entry.target,
+        tag: entry.tag,
+        field: entry.field,
+        delta: entry.netDelta,
+        finalValue: entry.finalValue,
+      })
+    }
   }
 
   function flushAllNotificationBatches() {
@@ -267,7 +305,7 @@ export function useGame() {
   function queueNotification(playerName, message, timestamp) {
     const parsed = parseBatchableMessage(message)
     if (!parsed) {
-      pushToast(playerName, message, timestamp)
+      recordNotification(playerName, message, timestamp, null)
       return
     }
 
@@ -307,9 +345,7 @@ export function useGame() {
         break
       case 'NOTIFICATION': {
         const n = msg.payload
-        if (!isOwnNotification(n.player_name)) {
-          queueNotification(n.player_name, n.message, n.timestamp)
-        }
+        queueNotification(n.player_name, n.message, n.timestamp)
         if (state.value?.players) {
           const hit = Object.values(state.value.players).find((pl) => pl.name === n.player_name)
           if (hit && hit.id !== playerId.value) lastHighlight[hit.id] = Date.now()
