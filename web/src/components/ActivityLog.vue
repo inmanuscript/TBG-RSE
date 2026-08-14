@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { ScrollText, X } from '@lucide/vue'
+import { RESOURCE_ICONS } from '../resourceIcons'
 
 const props = defineProps({
   open: { type: Boolean, required: true },
@@ -68,6 +69,10 @@ function kindLabel(item) {
 function kindColor(item) {
   return item.kind === 'resource' ? props.resourceMeta[item.resource]?.accent : null
 }
+
+function kindIcon(item) {
+  return item.kind === 'resource' ? RESOURCE_ICONS[item.resource] : null
+}
 </script>
 
 <template>
@@ -132,10 +137,11 @@ function kindColor(item) {
               </p>
               <span
                 v-if="kindLabel(item)"
-                class="shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold"
+                class="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold"
                 :class="!kindColor(item) && 'bg-surface text-ink-muted'"
                 :style="kindColor(item) ? { color: kindColor(item), backgroundColor: kindColor(item) + '22' } : {}"
               >
+                <component :is="kindIcon(item)" v-if="kindIcon(item)" class="h-3 w-3" />
                 {{ kindLabel(item) }}
               </span>
             </div>

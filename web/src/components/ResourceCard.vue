@@ -1,5 +1,7 @@
 <script setup>
+import { computed } from 'vue'
 import NumberStepper from './NumberStepper.vue'
+import { RESOURCE_ICONS } from '../resourceIcons'
 
 const props = defineProps({
   resourceKey: { type: String, required: true },
@@ -10,6 +12,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['change'])
+
+const icon = computed(() => RESOURCE_ICONS[props.resourceKey])
 
 function bump(target, delta) {
   emit('change', { target, resource: props.resourceKey, delta })
@@ -22,7 +26,8 @@ function bump(target, delta) {
     :style="{ borderTopColor: meta.accent, borderTopWidth: '3px' }"
   >
     <div class="mb-3 flex items-baseline justify-between">
-      <h3 class="font-display text-sm tracking-wide" :style="{ color: meta.accent }">
+      <h3 class="flex items-center gap-1.5 font-display text-sm tracking-wide" :style="{ color: meta.accent }">
+        <component :is="icon" v-if="icon" class="h-4 w-4" />
         {{ meta.label }}
       </h3>
     </div>

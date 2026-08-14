@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue'
+import { RESOURCE_ICONS } from '../resourceIcons'
 
 const props = defineProps({
   player: { type: Object, required: true },
@@ -14,6 +15,7 @@ const resources = computed(() =>
   props.resourceOrder.map((key) => ({
     key,
     meta: props.resourceMeta[key],
+    icon: RESOURCE_ICONS[key],
     stock: props.player.resources?.[key]?.stock ?? 0,
     production: props.player.resources?.[key]?.production ?? 0,
   })),
@@ -49,7 +51,10 @@ const resources = computed(() =>
         :key="r.key"
         class="rounded-lg bg-surface px-2 py-2 text-center"
       >
-        <p class="text-[10px] font-medium" :style="{ color: r.meta.accent }">{{ r.meta.short }}</p>
+        <p class="flex items-center justify-center gap-0.5 text-[10px] font-medium" :style="{ color: r.meta.accent }">
+          <component :is="r.icon" v-if="r.icon" class="h-3 w-3" />
+          {{ r.meta.short }}
+        </p>
         <p class="font-display text-lg tabular-nums leading-tight">{{ r.stock }}</p>
         <p class="text-[10px] tabular-nums text-ink-muted">
           {{ r.production >= 0 ? '+' : '' }}{{ r.production }}
