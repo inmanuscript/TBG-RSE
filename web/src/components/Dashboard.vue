@@ -1,11 +1,13 @@
 <script setup>
 import { computed, ref, watch, onMounted } from 'vue'
-import { Copy, Leaf, Flame, ScrollText, Wifi, WifiOff, SkipForward, Flag, Trophy, Zap, ChevronDown, ChevronUp } from '@lucide/vue'
+import { Copy, Leaf, Flame, ScrollText, Wifi, WifiOff, SkipForward, Flag, Trophy, Zap, ChevronDown, ChevronUp, X, AlertCircle } from '@lucide/vue'
 import ResourceCard from './ResourceCard.vue'
 import OpponentCard from './OpponentCard.vue'
 import VPHelper from './VPHelper.vue'
 import RepeatPressButton from './RepeatPressButton.vue'
 import CountKeypad from './CountKeypad.vue'
+import GlobalParamsBar from './GlobalParamsBar.vue'
+import GlobalParamConfigModal from './GlobalParamConfigModal.vue'
 
 const props = defineProps({
   state: { type: Object, required: true },
@@ -23,18 +25,21 @@ const props = defineProps({
   isMyTurn: { type: Boolean, required: true },
   activePlayer: { type: Object, default: null },
   playerId: { type: String, required: true },
+  isHost: { type: Boolean, default: false },
   error: { type: String, default: '' },
 })
 
 const emit = defineEmits([
   'update', 'ready', 'shortcut', 'project', 'buy-cards',
   'end-turn', 'pass', 'claim-action', 'tag', 'score', 'end-game', 'activity', 'leave',
+  'global-param', 'configure-global-params', 'clear-error',
 ])
 
 const cardBuy = ref(0)
 const cardBuyKeypadOpen = ref(false)
 const sellCount = ref(1)
 const tagsExpanded = ref(false)
+const configModalOpen = ref(false)
 
 onMounted(() => {
   tagsExpanded.value = window.matchMedia('(min-width: 640px)').matches
@@ -94,8 +99,7 @@ function onProject(p) {
 
 <template>
   <div class="mx-auto min-h-screen max-w-7xl px-3 pb-10 pt-3 sm:px-5">
-    <p v-if="error" class="mb-4 rounded-lg bg-red-950/50 px-3 py-2 text-sm text-red-300">{{ error }}</p>
-    <p v-else-if="!connected" class="mb-4 rounded-lg bg-amber-950/50 px-3 py-2 text-sm text-amber-200">
+    <p v-if="!connected" class="mb-4 rounded-lg bg-amber-950/50 px-3 py-2 text-sm text-amber-200">
       サーバーに再接続中です。オンラインになるまで操作できません。
     </p>
 
@@ -217,9 +221,26 @@ function onProject(p) {
           </span>
         </div>
       </div>
-
-      <p v-if="error" class="mt-3 rounded-lg bg-red-950/50 px-3 py-2 text-sm text-red-300">{{ error }}</p>
     </header>
+
+    <!-- Global Parameters Bar -->
+    <div class="mb-4">
+      <GlobalParamsBar
+        :global-params="state.global_params"
+        :is-host="isHost"
+        @update-param="(p) => $emit('global-param', p)"
+        @open-config="configModalOpen = true"
+      />
+    </div>
+
+    <!-- Global Parameters Config Modal -->
+    <GlobalParamConfigModal
+      :open="configModalOpen"
+      :is-host="isHost"
+      :global-params="state.global_params"
+      @save="(p) => $emit('configure-global-params', p)"
+      @close="configModalOpen = false"
+    />
 
     <!-- Research -->
     <section

@@ -28,10 +28,11 @@ type PlayerMeta struct {
 }
 
 type roomExtras struct {
-	TurnOrder        []string `json:"turn_order"`
-	ActivePlayerID   string   `json:"active_player_id"`
-	ActionsThisTurn  int      `json:"actions_this_turn"`
-	FirstPlayerIndex int      `json:"first_player_index"`
+	TurnOrder        []string                       `json:"turn_order"`
+	ActivePlayerID   string                         `json:"active_player_id"`
+	ActionsThisTurn  int                            `json:"actions_this_turn"`
+	FirstPlayerIndex int                            `json:"first_player_index"`
+	GlobalParams     map[string]game.GlobalParamDef `json:"global_params,omitempty"`
 }
 
 type playerExtras struct {
@@ -116,6 +117,7 @@ func (s *Store) SaveRoom(code, hostPlayerID string, state game.GameState, tokens
 		ActivePlayerID:   state.ActivePlayerID,
 		ActionsThisTurn:  state.ActionsThisTurn,
 		FirstPlayerIndex: state.FirstPlayerIndex,
+		GlobalParams:     state.GlobalParams,
 	})
 	if err != nil {
 		return err
@@ -230,6 +232,9 @@ func (s *Store) LoadAllRooms() ([]PersistedRoom, error) {
 		pr.State.ActivePlayerID = rex.ActivePlayerID
 		pr.State.ActionsThisTurn = rex.ActionsThisTurn
 		pr.State.FirstPlayerIndex = rex.FirstPlayerIndex
+		if rex.GlobalParams != nil {
+			pr.State.GlobalParams = rex.GlobalParams
+		}
 
 		prows, err := s.db.Query(`
 SELECT player_id, name, color, tr, is_ready, resources_json, reconnect_token, COALESCE(extras_json,'{}')

@@ -37,29 +37,86 @@ func TestApplyResourceDeltaProductionMC(t *testing.T) {
 }
 
 func TestApplyConversionAndProjects(t *testing.T) {
+	state := NewGameState("TEST")
 	p := NewPlayer("1", "Alice", "#ff0000", 1)
-	_, _, err := ApplyConversion(p, "greenery")
+	state.Players[p.ID] = p
+
+	_, _, err := ApplyConversion(&state, p.ID, "greenery")
 	if err == nil {
 		t.Fatal("expected insufficient plants")
 	}
 	rs := p.Resources[Plant]
 	rs.Stock = 8
 	p.Resources[Plant] = rs
-	_, _, err = ApplyConversion(p, "greenery")
+	_, _, err = ApplyConversion(&state, p.ID, "greenery")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if p.Score.GreeneryTiles != 1 {
 		t.Fatalf("greenery tiles=%d", p.Score.GreeneryTiles)
 	}
+	if p.TR != 21 {
+		t.Fatalf("TR=%d want 21 (oxygen went from 0 to 1)", p.TR)
+	}
+	if state.GlobalParams[ParamOxygen].Current != 1 {
+		t.Fatalf("oxygen=%d want 1", state.GlobalParams[ParamOxygen].Current)
+	}
 
 	p.Resources[MC] = ResourceState{Stock: 11}
-	_, _, err = ApplyStandardProject(p, "power_plant", 0)
+	_, _, err = ApplyStandardProject(&state, p.ID, "power_plant", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if p.Resources[Energy].Production != 1 || p.Resources[MC].Stock != 0 {
 		t.Fatalf("mc=%d energyProd=%d", p.Resources[MC].Stock, p.Resources[Energy].Production)
+	}
+}
+
+func TestGlobalParamsTRLimit(t *testing.T) {
+	state := NewGameState("TEST")
+	p := NewPlayer("1", "Alice", "#ff0000", 1)
+	p.TR = 20
+	state.Players[p.ID] = p
+
+	// Set temperature to max (8)
+	temp := state.GlobalParams[ParamTemperature]
+	temp.Current = temp.Max
+	state.GlobalParams[ParamTemperature] = temp
+
+	// Asteroid with temperature maxed: spends 14 MC, but no TR gain
+	p.Resources[MC] = ResourceState{Stock: 14}
+	_, _, err := ApplyStandardProject(&state, p.ID, "asteroid", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.TR != 20 {
+		t.Fatalf("TR should remain 20, got %d", p.TR)
+	}
+	if p.Resources[MC].Stock != 0 {
+		t.Fatalf("MC should be 0, got %d", p.Resources[MC].Stock)
+	}
+
+	// Direct update
+	_, _, err = UpdateGlobalParam(&state, ParamOceans, 1, p.ID, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.GlobalParams[ParamOceans].Current != 1 || p.TR != 21 {
+		t.Fatalf("oceans=%d TR=%d", state.GlobalParams[ParamOceans].Current, p.TR)
+	}
+
+	// Check AreGlobalParamsMaxed
+	if AreGlobalParamsMaxed(&state) {
+		t.Fatal("should not be maxed yet")
+	}
+	for id, param := range state.GlobalParams {
+		if param.RequiredEnd {
+			param.Current = param.Max
+			state.GlobalParams[id] = param
+		}
+	}
+	if !AreGlobalParamsMaxed(&state) {
+		t.Fatal("should be maxed now")
 	}
 }
 

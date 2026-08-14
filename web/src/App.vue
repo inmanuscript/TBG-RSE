@@ -27,6 +27,7 @@ const {
   orderedPlayers,
   isMyTurn,
   activePlayer,
+  isHost,
   toasts,
   activityOpen,
   activity,
@@ -50,6 +51,10 @@ const {
   readyProduction,
   updateTag,
   updateScore,
+  updateGlobalParam,
+  configureGlobalParams,
+  clearError,
+  dismissToast,
   endGame,
 } = game
 
@@ -87,7 +92,7 @@ function onEndGame() {
 </script>
 
 <template>
-  <ToastFeed :toasts="toasts" />
+  <ToastFeed :toasts="toasts" @dismiss="dismissToast" />
   <ActivityLog
     :open="activityOpen"
     :items="activity"
@@ -114,6 +119,7 @@ function onEndGame() {
     :is-my-turn="isMyTurn"
     :active-player="activePlayer"
     :player-id="playerId"
+    :is-host="isHost"
     :error="error"
     @update="onUpdate"
     @ready="readyProduction()"
@@ -125,6 +131,9 @@ function onEndGame() {
     @pass="pass()"
     @tag="(p) => updateTag(p.tag, p.delta)"
     @score="(p) => updateScore(p.field, p.delta)"
+    @global-param="(p) => updateGlobalParam(p.paramId, p.deltaSteps, p.grantTR)"
+    @configure-global-params="configureGlobalParams"
+    @clear-error="clearError"
     @end-game="onEndGame"
     @activity="activityOpen = true"
     @leave="onLeave"

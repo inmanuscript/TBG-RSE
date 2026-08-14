@@ -101,15 +101,85 @@ func (p *PlayerState) TotalVP() int {
 	return p.TR + p.Score.ManualVP()
 }
 
+// Global parameter IDs
+const (
+	ParamTemperature = "temperature"
+	ParamOxygen      = "oxygen"
+	ParamOceans      = "oceans"
+	ParamVenus       = "venus"
+)
+
+type GlobalParamDef struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Unit        string `json:"unit"`
+	Current     int    `json:"current"`
+	Min         int    `json:"min"`
+	Max         int    `json:"max"`
+	Step        int    `json:"step"`
+	Enabled     bool   `json:"enabled"`
+	RequiredEnd bool   `json:"required_end"`
+}
+
+func DefaultGlobalParams() map[string]GlobalParamDef {
+	return map[string]GlobalParamDef{
+		ParamTemperature: {
+			ID:          ParamTemperature,
+			Name:        "Temperature",
+			Unit:        "°C",
+			Current:     -30,
+			Min:         -30,
+			Max:         8,
+			Step:        2,
+			Enabled:     true,
+			RequiredEnd: true,
+		},
+		ParamOxygen: {
+			ID:          ParamOxygen,
+			Name:        "Oxygen",
+			Unit:        "%",
+			Current:     0,
+			Min:         0,
+			Max:         14,
+			Step:        1,
+			Enabled:     true,
+			RequiredEnd: true,
+		},
+		ParamOceans: {
+			ID:          ParamOceans,
+			Name:        "Oceans",
+			Unit:        "",
+			Current:     0,
+			Min:         0,
+			Max:         9,
+			Step:        1,
+			Enabled:     true,
+			RequiredEnd: true,
+		},
+		ParamVenus: {
+			ID:          ParamVenus,
+			Name:        "Venus",
+			Unit:        "%",
+			Current:     0,
+			Min:         0,
+			Max:         30,
+			Step:        2,
+			Enabled:     false,
+			RequiredEnd: false,
+		},
+	}
+}
+
 type GameState struct {
-	RoomID           string                  `json:"room_id"`
-	Generation       int                     `json:"generation"`
-	Phase            string                  `json:"phase"`
-	Players          map[string]*PlayerState `json:"players"`
-	TurnOrder        []string                `json:"turn_order"`
-	ActivePlayerID   string                  `json:"active_player_id"`
-	ActionsThisTurn  int                     `json:"actions_this_turn"`
-	FirstPlayerIndex int                     `json:"first_player_index"`
+	RoomID           string                    `json:"room_id"`
+	Generation       int                       `json:"generation"`
+	Phase            string                    `json:"phase"`
+	Players          map[string]*PlayerState   `json:"players"`
+	TurnOrder        []string                  `json:"turn_order"`
+	ActivePlayerID   string                    `json:"active_player_id"`
+	ActionsThisTurn  int                       `json:"actions_this_turn"`
+	FirstPlayerIndex int                       `json:"first_player_index"`
+	GlobalParams     map[string]GlobalParamDef `json:"global_params"`
 }
 
 type AuditLog struct {
@@ -146,11 +216,12 @@ func NewPlayer(id, name, color string, seat int) *PlayerState {
 
 func NewGameState(roomID string) GameState {
 	return GameState{
-		RoomID:     roomID,
-		Generation: InitialGeneration,
-		Phase:      PhaseResearch,
-		Players:    make(map[string]*PlayerState),
-		TurnOrder:  nil,
+		RoomID:       roomID,
+		Generation:   InitialGeneration,
+		Phase:        PhaseResearch,
+		Players:      make(map[string]*PlayerState),
+		TurnOrder:    nil,
+		GlobalParams: DefaultGlobalParams(),
 	}
 }
 
@@ -164,9 +235,13 @@ func CloneGameState(src GameState) GameState {
 		ActivePlayerID:   src.ActivePlayerID,
 		ActionsThisTurn:  src.ActionsThisTurn,
 		FirstPlayerIndex: src.FirstPlayerIndex,
+		GlobalParams:     make(map[string]GlobalParamDef, len(src.GlobalParams)),
 	}
 	for id, p := range src.Players {
 		dst.Players[id] = ClonePlayer(p)
+	}
+	for k, v := range src.GlobalParams {
+		dst.GlobalParams[k] = v
 	}
 	return dst
 }
@@ -222,5 +297,15 @@ func EnsureStateDefaults(state *GameState) {
 	}
 	if state.Generation == 0 {
 		state.Generation = InitialGeneration
+	}
+	if state.GlobalParams == nil {
+		state.GlobalParams = DefaultGlobalParams()
+	} else {
+		defaults := DefaultGlobalParams()
+		for k, v := range defaults {
+			if _, ok := state.GlobalParams[k]; !ok {
+				state.GlobalParams[k] = v
+			}
+		}
 	}
 }

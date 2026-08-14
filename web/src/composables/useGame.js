@@ -181,8 +181,53 @@ export function useGame() {
   let ws = null
   let toastSeq = 0
   let reconnectTimer = null
+  let errorTimer = null
   let intentionalClose = false
   const pendingNotifications = new Map()
+
+  function showToast(playerName, message, timestamp, isError = false) {
+    const id = ++toastSeq
+    toasts.value = [{ id, playerName, message, timestamp, isError }, ...toasts.value].slice(0, 5)
+    setTimeout(() => {
+      toasts.value = toasts.value.filter((t) => t.id !== id)
+    }, 4500)
+  }
+
+  function dismissToast(id) {
+    toasts.value = toasts.value.filter((t) => t.id !== id)
+  }
+
+  function clearErrorToasts() {
+    toasts.value = toasts.value.filter((t) => !t.isError)
+  }
+
+  function setError(message, autoClearMs = 5000) {
+    if (errorTimer) {
+      clearTimeout(errorTimer)
+      errorTimer = null
+    }
+    error.value = message
+    if (message) {
+      const now = new Date()
+      const ts = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`
+      showToast('Error', message, ts, true)
+    }
+    if (message && autoClearMs > 0) {
+      errorTimer = setTimeout(() => {
+        error.value = ''
+        errorTimer = null
+      }, autoClearMs)
+    }
+  }
+
+  function clearError() {
+    if (errorTimer) {
+      clearTimeout(errorTimer)
+      errorTimer = null
+    }
+    error.value = ''
+    clearErrorToasts()
+  }
 
   const me = computed(() => state.value?.players?.[playerId.value] ?? null)
   const opponents = computed(() => {
@@ -220,15 +265,20 @@ export function useGame() {
     takenSeats.value = []
     roomPlayers.value = []
     allowNewJoin.value = true
-    error.value = err
+    if (keepError) {
+      setError(err, 5000)
+    } else {
+      clearError()
+    }
   }
 
   function send(action, payload = {}) {
     if (!ws || ws.readyState !== WebSocket.OPEN) {
-      error.value = 'Not connected'
+      setError('Not connected', 4000)
       if (state.value && !intentionalClose) scheduleReconnect()
       return
     }
+    clearError()
     ws.send(JSON.stringify({ action, payload }))
   }
 
@@ -252,20 +302,12 @@ export function useGame() {
     ].slice(0, 100)
   }
 
-  function showToast(playerName, message, timestamp) {
-    const id = ++toastSeq
-    toasts.value = [{ id, playerName, message, timestamp }, ...toasts.value].slice(0, 5)
-    setTimeout(() => {
-      toasts.value = toasts.value.filter((t) => t.id !== id)
-    }, 4200)
-  }
-
   // Records every notification to the activity log (self included); only pops a
   // toast for other players' actions since you already know what you just did.
   function recordNotification(playerName, message, timestamp, parsed) {
     pushActivity(playerName, message, timestamp, parsed)
     if (!isOwnNotification(playerName)) {
-      showToast(playerName, message, timestamp)
+      showToast(playerName, message, timestamp, false)
     }
   }
 
@@ -337,7 +379,7 @@ export function useGame() {
           reconnect_token: p.reconnect_token,
           host_player_id: hostPlayerId.value,
         })
-        error.value = ''
+        clearError()
         break
       }
       case 'STATE_UPDATE':
@@ -359,17 +401,17 @@ export function useGame() {
         roomPlayers.value = Array.isArray(p.players) ? p.players : []
         allowNewJoin.value = p.allow_new_join !== false
         if (p.found === false) {
-          error.value = 'room not found'
+          setError('room not found', 5000)
           roomPlayers.value = []
           allowNewJoin.value = true
         } else if (!state.value) {
-          error.value = ''
+          clearError()
         }
         break
       }
       case 'ERROR': {
         const message = msg.payload?.message || 'Error'
-        error.value = message
+        setError(message, 5000)
         lobbyPending.value = false
         if (isSessionFatalError(message)) {
           resetGameState({ keepError: true })
@@ -407,7 +449,7 @@ export function useGame() {
     socket.onopen = () => {
       if (ws !== socket) return
       connected.value = true
-      error.value = ''
+      clearError()
       onOpen?.()
     }
     socket.onclose = () => {
@@ -418,7 +460,7 @@ export function useGame() {
     }
     socket.onerror = () => {
       if (ws !== socket) return
-      error.value = 'WebSocket error'
+      setError('WebSocket error', 4000)
       if (lobbyPending.value && !state.value) lobbyPending.value = false
     }
     socket.onmessage = (ev) => {
@@ -553,6 +595,8 @@ export function useGame() {
     peekRoom,
     tryAutoReconnect,
     leaveLocal,
+    clearError,
+    dismissToast,
     updateResource: (target, resource, delta) => send('UPDATE_RESOURCE', { target, resource, delta }),
     buyCards: (count) => send('BUY_CARDS', { count }),
     standardProject: (kind, cardsSold = 0) => send('STANDARD_PROJECT', { kind, cards_sold: cardsSold }),
@@ -563,6 +607,9 @@ export function useGame() {
     readyProduction: () => send('READY_PRODUCTION', {}),
     updateTag: (tag, delta) => send('UPDATE_TAG', { tag, delta }),
     updateScore: (field, delta) => send('UPDATE_SCORE', { field, delta }),
+    updateGlobalParam: (paramId, deltaSteps, grantTR = true) =>
+      send('UPDATE_GLOBAL_PARAM', { param_id: paramId, delta_steps: deltaSteps, grant_tr: grantTR }),
+    configureGlobalParams: (params) => send('CONFIGURE_GLOBAL_PARAMS', { params }),
     endGame: () => send('END_GAME', {}),
   }
 }

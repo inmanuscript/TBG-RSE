@@ -253,7 +253,7 @@ func (m *Manager) handleAction(client *Client, msg inboundMessage) error {
 			if err := game.CanAct(&r.State, client.playerID); err != nil {
 				return err
 			}
-			detail, auditDelta, err := game.ApplyStandardProject(pl, p.Kind, p.CardsSold)
+			detail, auditDelta, err := game.ApplyStandardProject(&r.State, client.playerID, p.Kind, p.CardsSold)
 			if err != nil {
 				return err
 			}
@@ -283,7 +283,7 @@ func (m *Manager) handleAction(client *Client, msg inboundMessage) error {
 			if err := game.CanAct(&r.State, client.playerID); err != nil {
 				return err
 			}
-			detail, auditDelta, err := game.ApplyConversion(pl, p.Kind)
+			detail, auditDelta, err := game.ApplyConversion(&r.State, client.playerID, p.Kind)
 			if err != nil {
 				return err
 			}
@@ -297,6 +297,43 @@ func (m *Manager) handleAction(client *Client, msg inboundMessage) error {
 				msg += " → next player"
 			}
 			m.commitLocked(r, pl.Name, msg)
+			return nil
+		})
+	case "UPDATE_GLOBAL_PARAM":
+		var p struct {
+			ParamID    string `json:"param_id"`
+			DeltaSteps int    `json:"delta_steps"`
+			GrantTR    bool   `json:"grant_tr"`
+		}
+		if err := json.Unmarshal(msg.Payload, &p); err != nil {
+			return fmt.Errorf("invalid payload")
+		}
+		return m.withPlayer(client, func(r *Room, pl *game.PlayerState) error {
+			detail, auditDelta, err := game.UpdateGlobalParam(&r.State, p.ParamID, p.DeltaSteps, client.playerID, p.GrantTR)
+			if err != nil {
+				return err
+			}
+			r.appendAuditLocked(client.playerID, "GLOBAL_PARAM", detail, auditDelta)
+			m.commitLocked(r, pl.Name, detail)
+			return nil
+		})
+	case "CONFIGURE_GLOBAL_PARAMS":
+		var p struct {
+			Params map[string]game.GlobalParamDef `json:"params"`
+		}
+		if err := json.Unmarshal(msg.Payload, &p); err != nil {
+			return fmt.Errorf("invalid payload")
+		}
+		return m.withPlayer(client, func(r *Room, pl *game.PlayerState) error {
+			if client.playerID != r.HostPlayerID {
+				return fmt.Errorf("only the host can configure global parameters")
+			}
+			if err := game.ConfigureGlobalParams(&r.State, p.Params); err != nil {
+				return err
+			}
+			detail := fmt.Sprintf("%s updated global parameter settings", pl.Name)
+			r.appendAuditLocked(client.playerID, "GLOBAL_PARAM_CONFIG", detail, nil)
+			m.commitLocked(r, pl.Name, detail)
 			return nil
 		})
 	case "CLAIM_ACTION":

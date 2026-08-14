@@ -350,6 +350,60 @@ func TestDisconnectAutoPassDuringTurn(t *testing.T) {
 	}
 }
 
+func TestWSGlobalParams(t *testing.T) {
+	mgr := NewManager(nil, nil)
+	srv := httptest.NewServer(http.HandlerFunc(mgr.HandleWS))
+	defer srv.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+
+	wsURL := "ws" + srv.URL[len("http"):]
+	conn, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "")
+
+	write := func(action string, payload any) {
+		t.Helper()
+		if err := wsjson.Write(ctx, conn, map[string]any{"action": action, "payload": payload}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	readEvent := func(want string) map[string]any {
+		t.Helper()
+		for {
+			var msg map[string]any
+			if err := wsjson.Read(ctx, conn, &msg); err != nil {
+				t.Fatalf("read %s: %v", want, err)
+			}
+			if msg["event"] == want {
+				return msg
+			}
+		}
+	}
+
+	write("CREATE_ROOM", map[string]string{"name": "Alice", "color": "#ff0000"})
+	readEvent("ROOM_JOINED")
+
+	// Update temperature directly via WS
+	write("UPDATE_GLOBAL_PARAM", map[string]any{
+		"param_id":    "temperature",
+		"delta_steps": 1,
+		"grant_tr":    true,
+	})
+	st := readEvent("STATE_UPDATE")
+	readEvent("NOTIFICATION")
+
+	payload := st["payload"].(map[string]any)
+	gp := payload["global_params"].(map[string]any)
+	temp := gp["temperature"].(map[string]any)
+	if temp["current"].(float64) != -28 {
+		t.Fatalf("temp=%v want -28", temp["current"])
+	}
+}
+
 func phaseOf(msg map[string]any) string {
 	_, p := genPhase(msg)
 	return p
