@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue'
+import RepeatPressButton from './RepeatPressButton.vue'
 
 const props = defineProps({
   players: { type: Array, required: true },
@@ -36,7 +37,7 @@ const ranked = computed(() =>
   <section class="mb-4 rounded-2xl border border-amber-500/40 bg-[#1a1620] p-4 text-ink shadow-toast sm:p-6">
     <h2 class="font-display text-lg tracking-wide text-amber-300">VP ヘルパ</h2>
     <p class="mt-1 text-sm text-ink-muted">
-      TR は自動反映。緑化・都市・賞などは自分の行だけ +/- で調整できます。
+      TR は自動反映。緑化・都市・賞などは自分の行だけ +/- で調整できます（長押しで連続増減）。
     </p>
 
     <div class="mt-4 space-y-4">
@@ -71,20 +72,18 @@ const ranked = computed(() =>
             <div class="mt-1 flex items-center gap-2">
               <p class="font-display text-xl tabular-nums">{{ scoreValue(row.player, f.field) }}</p>
               <template v-if="row.player.id === playerId">
-                <button
-                  type="button"
+                <RepeatPressButton
                   class="rounded-md bg-surface-border px-2 py-1 text-sm hover:bg-mars"
-                  @click="emit('score', { field: f.field, delta: -1 })"
+                  @press="emit('score', { field: f.field, delta: -1 })"
                 >
                   −
-                </button>
-                <button
-                  type="button"
+                </RepeatPressButton>
+                <RepeatPressButton
                   class="rounded-md bg-surface-border px-2 py-1 text-sm hover:bg-mars"
-                  @click="emit('score', { field: f.field, delta: 1 })"
+                  @press="emit('score', { field: f.field, delta: 1 })"
                 >
                   +
-                </button>
+                </RepeatPressButton>
               </template>
             </div>
           </div>

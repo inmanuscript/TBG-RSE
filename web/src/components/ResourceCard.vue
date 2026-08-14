@@ -1,4 +1,6 @@
 <script setup>
+import RepeatPressButton from './RepeatPressButton.vue'
+
 const props = defineProps({
   resourceKey: { type: String, required: true },
   meta: { type: Object, required: true },
@@ -29,15 +31,14 @@ function bump(target, delta) {
         <p class="text-[10px] uppercase tracking-wider text-ink-muted">Stock</p>
         <p class="font-display text-3xl font-bold tabular-nums leading-none">{{ stock }}</p>
         <div class="mt-2 grid grid-cols-4 gap-1">
-          <button
-            v-for="d in [-5, -1, 1, 5]"
+          <RepeatPressButton
+            v-for="d in [-10, -1, 1, 10]"
             :key="'s' + d"
-            type="button"
             class="rounded-md bg-surface px-1 py-1.5 text-xs font-semibold text-ink hover:bg-surface-border"
-            @click="bump('stock', d)"
+            @press="bump('stock', d)"
           >
             {{ d > 0 ? '+' : '' }}{{ d }}
-          </button>
+          </RepeatPressButton>
         </div>
       </div>
       <div>
@@ -46,15 +47,14 @@ function bump(target, delta) {
           {{ production >= 0 ? '+' : '' }}{{ production }}
         </p>
         <div class="mt-2 grid grid-cols-4 gap-1">
-          <button
-            v-for="d in [-5, -1, 1, 5]"
+          <RepeatPressButton
+            v-for="d in [-10, -1, 1, 10]"
             :key="'p' + d"
-            type="button"
             class="rounded-md bg-surface px-1 py-1.5 text-xs font-semibold text-ink hover:bg-surface-border"
-            @click="bump('production', d)"
+            @press="bump('production', d)"
           >
             {{ d > 0 ? '+' : '' }}{{ d }}
-          </button>
+          </RepeatPressButton>
         </div>
       </div>
     </div>

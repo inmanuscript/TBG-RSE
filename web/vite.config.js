@@ -6,6 +6,17 @@ export default defineConfig({
   build: {
     outDir: '../webui/dist',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        entryFileNames: 'assets/index.js',
+        chunkFileNames: 'assets/[name].js',
+        assetFileNames: (assetInfo) => {
+          const name = assetInfo.names?.[0] ?? assetInfo.name ?? ''
+          if (name.endsWith('.css')) return 'assets/index.css'
+          return 'assets/[name].[ext]'
+        },
+      },
+    },
   },
   server: {
     proxy: {

@@ -4,6 +4,7 @@ import { Copy, Leaf, Flame, ScrollText, Wifi, WifiOff, SkipForward, Flag, Trophy
 import ResourceCard from './ResourceCard.vue'
 import OpponentCard from './OpponentCard.vue'
 import VPHelper from './VPHelper.vue'
+import RepeatPressButton from './RepeatPressButton.vue'
 
 const props = defineProps({
   state: { type: Object, required: true },
@@ -262,15 +263,14 @@ function onProject(p) {
               <p class="font-display text-4xl font-bold tabular-nums">{{ me.tr }}</p>
             </div>
             <div class="flex flex-wrap gap-1.5">
-              <button
-                v-for="d in [-5, -1, 1, 5]"
+              <RepeatPressButton
+                v-for="d in [-10, -1, 1, 10]"
                 :key="'tr' + d"
-                type="button"
                 class="rounded-lg bg-surface px-3 py-2 text-sm font-semibold hover:bg-surface-border"
-                @click="$emit('update', { target: 'tr', delta: d })"
+                @press="$emit('update', { target: 'tr', delta: d })"
               >
                 {{ d > 0 ? '+' : '' }}{{ d }}
-              </button>
+              </RepeatPressButton>
             </div>
           </div>
 
@@ -342,8 +342,18 @@ function onProject(p) {
               <p class="truncate text-[9px] text-ink-muted sm:text-[10px]">{{ tag }}</p>
               <p class="font-display text-base tabular-nums sm:text-lg">{{ me.tags?.[tag] || 0 }}</p>
               <div class="mt-0.5 flex justify-center gap-1 sm:mt-1">
-                <button type="button" class="rounded bg-surface-border px-1.5 text-xs" @click="$emit('tag', { tag, delta: -1 })">−</button>
-                <button type="button" class="rounded bg-surface-border px-1.5 text-xs" @click="$emit('tag', { tag, delta: 1 })">+</button>
+                <RepeatPressButton
+                  class="rounded bg-surface-border px-1.5 text-xs"
+                  @press="$emit('tag', { tag, delta: -1 })"
+                >
+                  −
+                </RepeatPressButton>
+                <RepeatPressButton
+                  class="rounded bg-surface-border px-1.5 text-xs"
+                  @press="$emit('tag', { tag, delta: 1 })"
+                >
+                  +
+                </RepeatPressButton>
               </div>
             </div>
           </div>
