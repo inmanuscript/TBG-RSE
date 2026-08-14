@@ -25,7 +25,6 @@ const {
   me,
   opponents,
   orderedPlayers,
-  isHost,
   isMyTurn,
   activePlayer,
   toasts,
@@ -112,7 +111,6 @@ function onEndGame() {
     :projects="STANDARD_PROJECTS"
     :score-fields="SCORE_FIELDS"
     :last-highlight="lastHighlight"
-    :is-host="isHost"
     :is-my-turn="isMyTurn"
     :active-player="activePlayer"
     :player-id="playerId"

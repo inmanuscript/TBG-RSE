@@ -20,7 +20,6 @@ const props = defineProps({
   projects: { type: Array, required: true },
   scoreFields: { type: Array, required: true },
   lastHighlight: { type: Object, required: true },
-  isHost: { type: Boolean, required: true },
   isMyTurn: { type: Boolean, required: true },
   activePlayer: { type: Object, default: null },
   playerId: { type: String, required: true },
@@ -136,7 +135,7 @@ function onProject(p) {
             ログ
           </button>
           <button
-            v-if="isHost && state.phase !== 'ENDED'"
+            v-if="state.phase !== 'ENDED'"
             type="button"
             class="inline-flex items-center gap-2 rounded-xl border border-amber-800/50 bg-amber-950/30 px-3 py-2 text-sm text-amber-200 hover:border-amber-500"
             @click="$emit('end-game')"

@@ -399,9 +399,8 @@ func (m *Manager) handleAction(client *Client, msg inboundMessage) error {
 		})
 	case "END_GAME":
 		return m.withPlayer(client, func(r *Room, pl *game.PlayerState) error {
-			if client.playerID != r.HostPlayerID {
-				return fmt.Errorf("only host can end the game")
-			}
+			// Anyone may end the game — restricting this to the host left the
+			// room with no way to end it if the host disconnected for good.
 			game.EndGame(&r.State)
 			detail := "Game ended — VP helper open"
 			r.appendAuditLocked(client.playerID, "GAME_END", detail, nil)
