@@ -210,20 +210,27 @@ function onProject(p) {
       class="mb-4 rounded-2xl border border-cyan-900/40 bg-cyan-950/20 p-4"
     >
       <h2 class="font-display text-sm tracking-wide text-cyan-200">研究フェイズ — カード購入</h2>
-      <p class="mt-1 text-sm text-ink-muted">4枚ドロー想定。購入は 3 MC / 枚（0〜4）。</p>
+      <p class="mt-1 text-sm text-ink-muted">4枚ドロー想定。3 MC / 枚。</p>
       <div v-if="!me.research_done" class="mt-3 flex flex-wrap items-center gap-3">
-        <input
-          v-model.number="cardBuy"
-          type="number"
-          min="0"
-          max="4"
-          class="w-20 rounded-lg border border-surface-border bg-surface px-3 py-2"
-        />
-        <span class="text-sm text-ink-muted">枚 = {{ (cardBuy || 0) * 3 }} MC</span>
+        <div class="flex gap-1.5" role="radiogroup" aria-label="購入枚数">
+          <button
+            v-for="n in [0, 1, 2, 3, 4]"
+            :key="n"
+            type="button"
+            role="radio"
+            :aria-checked="cardBuy === n"
+            class="h-9 w-9 rounded-full text-sm font-semibold transition"
+            :class="cardBuy === n ? 'bg-cyan-600 text-white' : 'bg-surface text-ink-muted hover:bg-surface-border hover:text-ink'"
+            @click="cardBuy = n"
+          >
+            {{ n }}
+          </button>
+        </div>
+        <span class="text-sm text-ink-muted">= {{ cardBuy * 3 }} MC</span>
         <button
           type="button"
           class="rounded-xl bg-cyan-700 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-600"
-          @click="$emit('buy-cards', cardBuy || 0)"
+          @click="$emit('buy-cards', cardBuy)"
         >
           購入確定
         </button>
