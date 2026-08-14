@@ -39,6 +39,84 @@ const SCORE_FIELDS = [
 
 const COLORS = ['#FF5555', '#55AAFF', '#55FF88', '#FFAA33', '#C77DFF', '#FF77AA']
 const SEATS = [1, 2, 3, 4, 5]
+const NOTIFICATION_BATCH_MS = 2000
+
+function formatSignedDelta(n) {
+  return n >= 0 ? `+${n}` : `${n}`
+}
+
+function parseBatchableMessage(message) {
+  const resources = RESOURCE_ORDER.join('|')
+  const stockProd = message.match(new RegExp(`^(.+) (${resources}) (stock|production) ([+-]\\d+) → (\\d+)$`))
+  if (stockProd) {
+    const [, playerName, resource, target, deltaStr, finalStr] = stockProd
+    return {
+      batchKey: `${playerName}|${resource}|${target}`,
+      playerName,
+      kind: 'resource',
+      resource,
+      target,
+      delta: Number(deltaStr),
+      finalValue: Number(finalStr),
+    }
+  }
+  const tr = message.match(/^(.+) TR ([+-]\d+) → (\d+)$/)
+  if (tr) {
+    const [, playerName, deltaStr, finalStr] = tr
+    return {
+      batchKey: `${playerName}|tr`,
+      playerName,
+      kind: 'tr',
+      delta: Number(deltaStr),
+      finalValue: Number(finalStr),
+    }
+  }
+  const tag = message.match(/^(.+) tag (\S+) ([+-]\d+) → (\d+)$/)
+  if (tag) {
+    const [, playerName, tagName, deltaStr, finalStr] = tag
+    return {
+      batchKey: `${playerName}|tag|${tagName}`,
+      playerName,
+      kind: 'tag',
+      tag: tagName,
+      delta: Number(deltaStr),
+      finalValue: Number(finalStr),
+    }
+  }
+  const score = message.match(/^(.+) score\.(\S+) ([+-]\d+) → (\d+) \(total VP \d+\)$/)
+  if (score) {
+    const [, playerName, field, deltaStr, finalStr] = score
+    return {
+      batchKey: `${playerName}|score|${field}`,
+      playerName,
+      kind: 'score',
+      field,
+      delta: Number(deltaStr),
+      finalValue: Number(finalStr),
+    }
+  }
+  return null
+}
+
+function formatBatchMessage(entry, players) {
+  const { playerName, netDelta, finalValue } = entry
+  const signed = formatSignedDelta(netDelta)
+  switch (entry.kind) {
+    case 'resource':
+      return `${playerName} ${entry.resource} ${entry.target} ${signed} → ${finalValue}`
+    case 'tr':
+      return `${playerName} TR ${signed} → ${finalValue}`
+    case 'tag':
+      return `${playerName} tag ${entry.tag} ${signed} → ${finalValue}`
+    case 'score': {
+      const pl = players ? Object.values(players).find((p) => p.name === playerName) : null
+      const vpSuffix = pl ? ` (total VP ${totalVP(pl)})` : ''
+      return `${playerName} score.${entry.field} ${signed} → ${finalValue}${vpSuffix}`
+    }
+    default:
+      return ''
+  }
+}
 
 function loadSession() {
   try {
@@ -98,6 +176,7 @@ export function useGame() {
   let toastSeq = 0
   let reconnectTimer = null
   let intentionalClose = false
+  const pendingNotifications = new Map()
 
   const me = computed(() => state.value?.players?.[playerId.value] ?? null)
   const opponents = computed(() => {
@@ -139,6 +218,48 @@ export function useGame() {
     }, 4200)
   }
 
+  function flushNotificationBatch(batchKey) {
+    const entry = pendingNotifications.get(batchKey)
+    if (!entry) return
+    if (entry.timer) clearTimeout(entry.timer)
+    pendingNotifications.delete(batchKey)
+    if (entry.netDelta === 0) return
+    const message = formatBatchMessage(entry, state.value?.players)
+    if (message) pushToast(entry.playerName, message, entry.timestamp)
+  }
+
+  function flushAllNotificationBatches() {
+    for (const key of [...pendingNotifications.keys()]) {
+      clearTimeout(pendingNotifications.get(key)?.timer)
+      flushNotificationBatch(key)
+    }
+  }
+
+  function isOwnNotification(playerName) {
+    if (!playerName || playerName === 'System') return false
+    const myName = state.value?.players?.[playerId.value]?.name
+    return Boolean(myName && playerName === myName)
+  }
+
+  function queueNotification(playerName, message, timestamp) {
+    const parsed = parseBatchableMessage(message)
+    if (!parsed) {
+      pushToast(playerName, message, timestamp)
+      return
+    }
+
+    let entry = pendingNotifications.get(parsed.batchKey)
+    if (!entry) {
+      entry = { ...parsed, netDelta: 0, timer: null }
+      pendingNotifications.set(parsed.batchKey, entry)
+    }
+    entry.netDelta += parsed.delta
+    entry.finalValue = parsed.finalValue
+    entry.timestamp = timestamp
+    if (entry.timer) clearTimeout(entry.timer)
+    entry.timer = setTimeout(() => flushNotificationBatch(parsed.batchKey), NOTIFICATION_BATCH_MS)
+  }
+
   function handleEvent(msg) {
     switch (msg.event) {
       case 'ROOM_JOINED': {
@@ -163,10 +284,12 @@ export function useGame() {
         break
       case 'NOTIFICATION': {
         const n = msg.payload
-        pushToast(n.player_name, n.message, n.timestamp)
+        if (!isOwnNotification(n.player_name)) {
+          queueNotification(n.player_name, n.message, n.timestamp)
+        }
         if (state.value?.players) {
           const hit = Object.values(state.value.players).find((pl) => pl.name === n.player_name)
-          if (hit) lastHighlight[hit.id] = Date.now()
+          if (hit && hit.id !== playerId.value) lastHighlight[hit.id] = Date.now()
         }
         break
       }
@@ -299,6 +422,7 @@ export function useGame() {
   }
 
   function leaveLocal() {
+    flushAllNotificationBatches()
     intentionalClose = true
     if (reconnectTimer) {
       clearTimeout(reconnectTimer)
@@ -322,6 +446,7 @@ export function useGame() {
   }
 
   onUnmounted(() => {
+    flushAllNotificationBatches()
     if (reconnectTimer) clearTimeout(reconnectTimer)
     if (ws) {
       ws.onclose = null
