@@ -40,6 +40,10 @@ const SCORE_FIELDS = [
 const COLORS = ['#FF5555', '#55AAFF', '#55FF88', '#FFAA33', '#C77DFF', '#FF77AA']
 const SEATS = [1, 2, 3, 4, 5]
 const NOTIFICATION_BATCH_MS = 2000
+// Reconnect backoff: start fast for quick recovery from a blip, but back off
+// while genuinely offline instead of hammering the server every 400ms.
+const RECONNECT_BASE_MS = 400
+const RECONNECT_MAX_MS = 5000
 
 function formatSignedDelta(n) {
   return n >= 0 ? `+${n}` : `${n}`
@@ -181,6 +185,7 @@ export function useGame() {
   let ws = null
   let toastSeq = 0
   let reconnectTimer = null
+  let reconnectDelay = RECONNECT_BASE_MS
   let errorTimer = null
   let intentionalClose = false
   const pendingNotifications = new Map()
@@ -202,12 +207,17 @@ export function useGame() {
   }
 
   function setError(message, autoClearMs = 5000) {
+    // While offline, scheduleReconnect retries fast and each failed attempt
+    // re-fires the same "WebSocket error"/"Not connected" message — without
+    // this guard that flooded the toast feed with a new toast per retry.
+    // Only pop a fresh toast when the message actually changes.
+    const alreadyShowing = message && error.value === message
     if (errorTimer) {
       clearTimeout(errorTimer)
       errorTimer = null
     }
     error.value = message
-    if (message) {
+    if (message && !alreadyShowing) {
       const now = new Date()
       const ts = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`
       showToast('Error', message, ts, true)
@@ -449,6 +459,7 @@ export function useGame() {
     socket.onopen = () => {
       if (ws !== socket) return
       connected.value = true
+      reconnectDelay = RECONNECT_BASE_MS
       clearError()
       onOpen?.()
     }
@@ -489,7 +500,8 @@ export function useGame() {
           reconnect_token: session.reconnect_token,
         })
       })
-    }, 400)
+    }, reconnectDelay)
+    reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_MS)
   }
 
   function createRoom(name, color, seat = 1) {
