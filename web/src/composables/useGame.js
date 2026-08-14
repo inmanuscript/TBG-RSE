@@ -79,6 +79,7 @@ function totalVP(player) {
 
 export function useGame() {
   const connected = ref(false)
+  const lobbyPending = ref(false)
   const error = ref('')
   const roomCode = ref('')
   const playerId = ref('')
@@ -147,6 +148,7 @@ export function useGame() {
         reconnectToken.value = p.reconnect_token
         hostPlayerId.value = p.host_player_id || ''
         state.value = p.state
+        lobbyPending.value = false
         saveSession({
           room_code: p.room_code,
           player_id: p.player_id,
@@ -181,6 +183,7 @@ export function useGame() {
       }
       case 'ERROR': {
         error.value = msg.payload?.message || 'Error'
+        lobbyPending.value = false
         if (!state.value) clearSession()
         break
       }
@@ -219,11 +222,13 @@ export function useGame() {
     socket.onclose = () => {
       if (ws !== socket) return
       connected.value = false
+      if (lobbyPending.value && !state.value) lobbyPending.value = false
       if (!intentionalClose) scheduleReconnect()
     }
     socket.onerror = () => {
       if (ws !== socket) return
       error.value = 'WebSocket error'
+      if (lobbyPending.value && !state.value) lobbyPending.value = false
     }
     socket.onmessage = (ev) => {
       if (ws !== socket) return
@@ -255,10 +260,12 @@ export function useGame() {
   }
 
   function createRoom(name, color, seat = 1) {
+    lobbyPending.value = true
     connect(() => send('CREATE_ROOM', { name, color, seat }))
   }
 
   function joinRoom(code, name, color, seat = 0) {
+    lobbyPending.value = true
     connect(() => send('JOIN_ROOM', { room_code: code, name, color, seat }))
   }
 
@@ -303,6 +310,7 @@ export function useGame() {
     hostPlayerId.value = ''
     reconnectToken.value = ''
     state.value = null
+    lobbyPending.value = false
     takenColors.value = []
     takenSeats.value = []
     if (ws) {
@@ -331,6 +339,7 @@ export function useGame() {
     SEATS,
     totalVP,
     connected,
+    lobbyPending,
     error,
     roomCode,
     playerId,

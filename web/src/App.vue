@@ -17,6 +17,7 @@ const {
   COLORS,
   SEATS,
   connected,
+  lobbyPending,
   error,
   roomCode,
   playerId,
@@ -132,7 +133,7 @@ function onEndGame() {
     :taken-colors="takenColors"
     :taken-seats="takenSeats"
     :error="error"
-    :connecting="connected && !state"
+    :connecting="lobbyPending"
     @create="onCreate"
     @join="onJoin"
     @peek="peekRoom"
