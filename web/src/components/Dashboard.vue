@@ -269,7 +269,7 @@ function onProject(p) {
             </div>
             <div class="flex flex-wrap gap-1.5">
               <RepeatPressButton
-                v-for="d in [-10, -1, 1, 10]"
+                v-for="d in [-1, 1]"
                 :key="'tr' + d"
                 class="rounded-lg bg-surface px-3 py-2 text-sm font-semibold hover:bg-surface-border"
                 :disabled="!connected"

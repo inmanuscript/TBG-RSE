@@ -1,5 +1,5 @@
 <script setup>
-import RepeatPressButton from './RepeatPressButton.vue'
+import NumberStepper from './NumberStepper.vue'
 
 const props = defineProps({
   resourceKey: { type: String, required: true },
@@ -30,35 +30,23 @@ function bump(target, delta) {
     <div class="grid grid-cols-2 gap-3">
       <div>
         <p class="text-[10px] uppercase tracking-wider text-ink-muted">Stock</p>
-        <p class="font-display text-3xl font-bold tabular-nums leading-none">{{ stock }}</p>
-        <div class="mt-2 grid grid-cols-4 gap-1">
-          <RepeatPressButton
-            v-for="d in [-10, -1, 1, 10]"
-            :key="'s' + d"
-            class="rounded-md bg-surface px-1 py-1.5 text-xs font-semibold text-ink hover:bg-surface-border"
-            :disabled="!interactive"
-            @press="bump('stock', d)"
-          >
-            {{ d > 0 ? '+' : '' }}{{ d }}
-          </RepeatPressButton>
-        </div>
+        <NumberStepper
+          :value="stock"
+          :label="`${meta.label} Stock`"
+          :disabled="!interactive"
+          @delta="(d) => bump('stock', d)"
+        />
       </div>
       <div>
         <p class="text-[10px] uppercase tracking-wider text-ink-muted">Production</p>
-        <p class="font-display text-3xl font-bold tabular-nums leading-none text-ink-muted">
-          {{ production >= 0 ? '+' : '' }}{{ production }}
-        </p>
-        <div class="mt-2 grid grid-cols-4 gap-1">
-          <RepeatPressButton
-            v-for="d in [-10, -1, 1, 10]"
-            :key="'p' + d"
-            class="rounded-md bg-surface px-1 py-1.5 text-xs font-semibold text-ink hover:bg-surface-border"
-            :disabled="!interactive"
-            @press="bump('production', d)"
-          >
-            {{ d > 0 ? '+' : '' }}{{ d }}
-          </RepeatPressButton>
-        </div>
+        <NumberStepper
+          :value="production"
+          :label="`${meta.label} Production`"
+          value-class="text-ink-muted"
+          show-sign
+          :disabled="!interactive"
+          @delta="(d) => bump('production', d)"
+        />
       </div>
     </div>
   </div>
