@@ -194,6 +194,7 @@ func ClaimAction(state *GameState, playerID string) (advanced bool, err error) {
 	if _, err := requireActive(state, playerID); err != nil {
 		return false, err
 	}
+	state.GameStarted = true
 	state.ActionsThisTurn++
 	if state.ActionsThisTurn >= MaxActionsPerTurn {
 		AdvanceTurn(state)
@@ -221,12 +222,20 @@ func Pass(state *GameState, playerID string) (allPassed bool, err error) {
 	if state.ActionsThisTurn > 0 {
 		return false, fmt.Errorf("already took an action this turn — use End Turn instead")
 	}
+	state.GameStarted = true
 	p.Passed = true
 	AdvanceTurn(state)
 	return AllPassed(state), nil
 }
 
-// AbsentPlayer marks a disconnected player out for the current phase.
+// AbsentPlayer marks a player out for the current phase (research
+// skipped / auto-passed / ready-for-production) so the rest of the table
+// isn't stuck waiting on them. A dropped WebSocket connection by itself no
+// longer calls this — it's only reached via an explicit LEAVE from the
+// player themselves, or a SKIP_PLAYER from someone else once the target is
+// confirmed offline (see internal/room/manager.go). A raw connection blip
+// leaves the player's state untouched; they simply pick up where they left
+// off on reconnect.
 func AbsentPlayer(state *GameState, playerID string) (detail string, ok bool) {
 	if state == nil {
 		return "", false

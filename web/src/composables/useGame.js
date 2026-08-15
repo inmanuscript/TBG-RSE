@@ -548,6 +548,14 @@ export function useGame() {
   }
 
   function leaveLocal() {
+    // Best-effort: tell the server this is a deliberate exit so it skips
+    // whatever we still owed this phase (research/turn/ready) instead of
+    // leaving the table waiting on us indefinitely. A plain dropped
+    // connection (network blip, backgrounded tab, closing the browser
+    // outright) intentionally does NOT do this — only this explicit LEAVE.
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      send('LEAVE', {})
+    }
     flushAllNotificationBatches()
     intentionalClose = true
     if (reconnectTimer) {
@@ -623,5 +631,6 @@ export function useGame() {
       send('UPDATE_GLOBAL_PARAM', { param_id: paramId, delta_steps: deltaSteps, grant_tr: grantTR }),
     configureGlobalParams: (params) => send('CONFIGURE_GLOBAL_PARAMS', { params }),
     endGame: () => send('END_GAME', {}),
+    skipPlayer: (targetPlayerId) => send('SKIP_PLAYER', { target_player_id: targetPlayerId }),
   }
 }

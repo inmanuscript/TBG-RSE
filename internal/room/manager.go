@@ -129,32 +129,16 @@ func (m *Manager) detachClient(c *Client) {
 	r.mu.Unlock()
 	c.room = nil
 	if playerID != "" {
-		m.handlePlayerDisconnect(r, playerID)
+		// A dropped socket by itself never touches game state — it looks
+		// identical whether it's a genuine departure or a momentary blip (a
+		// backgrounded mobile tab, a Wi-Fi roam, a page reload), and the
+		// player can reconnect and resume at any time, no expiry. Only an
+		// explicit LEAVE from the player, or a SKIP_PLAYER from someone else
+		// once they're confirmed offline, actually skips their turn (see
+		// handleAction). This just refreshes everyone's view of who's online
+		// so the "offline" badge / skip option shows up promptly.
+		r.broadcastPresence()
 	}
-}
-
-func (m *Manager) handlePlayerDisconnect(r *Room, playerID string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.isPlayerOnline(playerID) {
-		return
-	}
-	detail, ok := game.AbsentPlayer(&r.State, playerID)
-	if !ok {
-		return
-	}
-	r.appendAuditLocked(playerID, "DISCONNECT", detail, nil)
-	m.persistLocked(r)
-	state := game.CloneGameState(r.State)
-	r.broadcastAllLocked(outboundMessage{Event: "STATE_UPDATE", Payload: state})
-	r.broadcastAllLocked(outboundMessage{
-		Event: "NOTIFICATION",
-		Payload: map[string]string{
-			"player_name": "System",
-			"message":     detail,
-			"timestamp":   time.Now().Format("15:04:05"),
-		},
-	})
 }
 
 func (m *Manager) handleAction(client *Client, msg inboundMessage) error {
@@ -444,6 +428,47 @@ func (m *Manager) handleAction(client *Client, msg inboundMessage) error {
 			m.commitLocked(r, "System", detail)
 			return nil
 		})
+	case "LEAVE":
+		// Sent by the client right before it closes its own socket, when the
+		// player deliberately chooses to step away. This is the only thing
+		// that skips a player's research/turn/ready state on the way out —
+		// a raw dropped connection never does (see detachClient).
+		return m.withPlayer(client, func(r *Room, pl *game.PlayerState) error {
+			detail, ok := game.AbsentPlayer(&r.State, client.playerID)
+			if !ok {
+				return nil
+			}
+			r.appendAuditLocked(client.playerID, "LEAVE", detail, nil)
+			m.commitLocked(r, pl.Name, detail)
+			return nil
+		})
+	case "SKIP_PLAYER":
+		var p struct {
+			TargetPlayerID string `json:"target_player_id"`
+		}
+		if err := json.Unmarshal(msg.Payload, &p); err != nil {
+			return fmt.Errorf("invalid payload")
+		}
+		// Any player may skip another — not just the host — for the same
+		// reason END_GAME isn't host-restricted: if the host is the one who
+		// vanished, nobody else could unblock the table otherwise.
+		return m.withPlayer(client, func(r *Room, pl *game.PlayerState) error {
+			target, ok := r.State.Players[p.TargetPlayerID]
+			if !ok {
+				return fmt.Errorf("player not found")
+			}
+			if r.isPlayerOnline(p.TargetPlayerID) {
+				return fmt.Errorf("%s is online — they don't need to be skipped", target.Name)
+			}
+			detail, skipped := game.AbsentPlayer(&r.State, p.TargetPlayerID)
+			if !skipped {
+				return fmt.Errorf("%s has nothing to skip right now", target.Name)
+			}
+			detail = fmt.Sprintf("%s (skipped by %s)", detail, pl.Name)
+			r.appendAuditLocked(client.playerID, "SKIP_PLAYER", detail, nil)
+			m.commitLocked(r, pl.Name, detail)
+			return nil
+		})
 	default:
 		return fmt.Errorf("unknown action: %s", msg.Action)
 	}
@@ -465,7 +490,7 @@ func (m *Manager) withPlayer(client *Client, fn func(*Room, *game.PlayerState) e
 
 func (m *Manager) commitLocked(r *Room, playerName, message string) {
 	m.persistLocked(r)
-	state := game.CloneGameState(r.State)
+	state := r.cloneStateWithPresenceLocked()
 	r.broadcastAllLocked(outboundMessage{Event: "STATE_UPDATE", Payload: state})
 	r.broadcastAllLocked(outboundMessage{
 		Event: "NOTIFICATION",
@@ -519,6 +544,27 @@ func (r *Room) isPlayerOnline(playerID string) bool {
 		}
 	}
 	return false
+}
+
+// cloneStateWithPresenceLocked clones r.State the way every outbound
+// snapshot should: with each player's transient Online flag freshly
+// computed from live connections. Must be called with r.mu held.
+func (r *Room) cloneStateWithPresenceLocked() game.GameState {
+	state := game.CloneGameState(r.State)
+	for id, p := range state.Players {
+		p.Online = r.isPlayerOnline(id)
+	}
+	return state
+}
+
+// broadcastPresence refreshes everyone's view of who's online without
+// touching game state — used when a socket attaches or drops so the
+// "offline" badge / skip option in the UI stays current.
+func (r *Room) broadcastPresence() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	state := r.cloneStateWithPresenceLocked()
+	r.broadcastAllLocked(outboundMessage{Event: "STATE_UPDATE", Payload: state})
 }
 
 func (m *Manager) joinRoom(client *Client, code, name, color string, seat int, reclaimPlayerID string) error {
@@ -575,6 +621,16 @@ func (m *Manager) joinRoomNew(client *Client, r *Room, name, color string, seat 
 	token := randomToken()
 	r.State.Players[playerID] = game.NewPlayer(playerID, name, color, seat)
 	game.AddPlayerToTurnOrder(&r.State, playerID)
+	// The solo host's own research can auto-advance Phase to ACTION before
+	// anyone else joins (see AllowNewJoin's doc comment) even though nobody
+	// has actually played a turn yet. Reopen research so the new player gets
+	// their own research step instead of being dropped mid-generation with
+	// nothing bought.
+	if !r.State.GameStarted && r.State.Phase == game.PhaseAction {
+		r.State.Phase = game.PhaseResearch
+		r.State.ActionsThisTurn = 0
+		r.State.ActivePlayerID = ""
+	}
 	r.tokens[playerID] = token
 	r.mu.Unlock()
 
@@ -694,7 +750,15 @@ func (m *Manager) reconnect(client *Client, code, playerID, token string) error 
 	r.mu.Unlock()
 
 	m.attach(client, r, playerID)
-	return client.sendJoined(r, playerID, token)
+	if err := client.sendJoined(r, playerID, token); err != nil {
+		return err
+	}
+	// Unlike CREATE_ROOM/JOIN_ROOM (which already broadcast a fresh state to
+	// everyone via broadcastStateAndNotify), a plain reconnect only replies
+	// to the reconnecting client. Refresh presence for everyone else too so
+	// the "offline" badge / skip option clears promptly.
+	r.broadcastPresence()
+	return nil
 }
 
 func (m *Manager) attach(client *Client, r *Room, playerID string) {
@@ -758,7 +822,7 @@ func (r *Room) appendAuditLocked(playerID, typ, detail string, delta map[string]
 func (r *Room) broadcastStateAndNotify(playerName, message, playerID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	state := game.CloneGameState(r.State)
+	state := r.cloneStateWithPresenceLocked()
 	r.broadcastAllLocked(outboundMessage{Event: "STATE_UPDATE", Payload: state})
 	r.broadcastAllLocked(outboundMessage{
 		Event: "NOTIFICATION",
@@ -787,7 +851,7 @@ func (c *Client) send(msg outboundMessage) error {
 
 func (c *Client) sendJoined(r *Room, playerID, token string) error {
 	r.mu.Lock()
-	state := game.CloneGameState(r.State)
+	state := r.cloneStateWithPresenceLocked()
 	code := r.Code
 	host := r.HostPlayerID
 	r.mu.Unlock()

@@ -268,16 +268,27 @@ func TestRebuildTurnOrderBySeat(t *testing.T) {
 func TestAllowNewJoin(t *testing.T) {
 	state := NewGameState("R")
 	if !AllowNewJoin(&state) {
-		t.Fatal("generation 1 research should allow new join")
+		t.Fatal("fresh research phase should allow new join")
 	}
+	// A solo player's research finishing (MaybeFinishResearch) can advance
+	// Phase to ACTION before anyone has actually played a turn — that alone
+	// must not lock the room out from new joins.
 	state.Phase = PhaseAction
-	if AllowNewJoin(&state) {
-		t.Fatal("action phase should not allow new join")
+	if !AllowNewJoin(&state) {
+		t.Fatal("action phase with no turn played yet should still allow new join")
 	}
-	state.Phase = PhaseResearch
 	state.Generation = 2
+	if !AllowNewJoin(&state) {
+		t.Fatal("later generation with no turn played yet should still allow new join")
+	}
+	state.GameStarted = true
 	if AllowNewJoin(&state) {
-		t.Fatal("generation 2 research should not allow new join")
+		t.Fatal("once a turn has actually been claimed/passed, new join should be blocked")
+	}
+	state.GameStarted = false
+	state.Phase = PhaseEnded
+	if AllowNewJoin(&state) {
+		t.Fatal("ended game should not allow new join")
 	}
 }
 
