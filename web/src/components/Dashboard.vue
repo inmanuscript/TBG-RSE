@@ -41,11 +41,21 @@ const sellCount = ref(1)
 const tagsExpanded = ref(false)
 const projectsExpanded = ref(false)
 const configModalOpen = ref(false)
+// 研究フェーズパネルは「未購入なら展開/購入済みなら折りたたみ」を初期値とし、
+// 自分の購入完了・新しい研究フェーズ突入のたびに追従させる(#19: 見逃し対策)。
+const researchExpanded = ref(!props.me.research_done)
 
 onMounted(() => {
   const isDesktop = window.matchMedia('(min-width: 640px)').matches
   tagsExpanded.value = isDesktop
   projectsExpanded.value = isDesktop
+})
+
+watch(() => props.me.research_done, (done) => {
+  if (done) researchExpanded.value = false
+})
+watch(() => props.state.phase, (phase) => {
+  if (phase === 'RESEARCH') researchExpanded.value = !props.me.research_done
 })
 
 // Generation 1 deals a larger starting hand (up to 10); later generations cap at 4.
@@ -203,9 +213,84 @@ function onProject(p) {
           </button>
         </div>
       </div>
+    </header>
 
-      <!-- Turn strip -->
-      <div v-if="state.phase === 'ACTION' || state.phase === 'PRODUCTION_WAIT'" class="mt-4 rounded-xl bg-surface p-3">
+    <!-- Global Parameters Bar -->
+    <div class="mb-4">
+      <GlobalParamsBar
+        :global-params="state.global_params"
+        :is-host="isHost"
+        @update-param="(p) => $emit('global-param', p)"
+        @open-config="configModalOpen = true"
+      />
+    </div>
+
+    <!-- Global Parameters Config Modal -->
+    <GlobalParamConfigModal
+      :open="configModalOpen"
+      :is-host="isHost"
+      :global-params="state.global_params"
+      @save="(p) => $emit('configure-global-params', p)"
+      @close="configModalOpen = false"
+    />
+
+    <!-- VP helper -->
+    <VPHelper
+      v-if="state.phase === 'ENDED'"
+      :players="orderedPlayers"
+      :player-id="playerId"
+      :score-fields="scoreFields"
+      @score="(p) => $emit('score', p)"
+    />
+
+    <template v-if="state.phase !== 'ENDED'">
+      <!-- 2. タグカウントヘルパ -->
+      <div class="mb-4 rounded-2xl border border-surface-border bg-surface-raised/70 p-4">
+        <button
+          type="button"
+          class="flex w-full items-start justify-between gap-3 text-left"
+          :aria-expanded="tagsExpanded"
+          @click="tagsExpanded = !tagsExpanded"
+        >
+          <div class="min-w-0">
+            <h3 class="font-display text-xs tracking-wide text-ink-muted">Tags</h3>
+            <p v-if="!tagsExpanded && tagSummary.length" class="mt-1 truncate text-xs text-ink">
+              {{ tagSummary.join(' · ') }}
+            </p>
+            <p v-else-if="!tagsExpanded" class="mt-1 text-xs text-ink-muted">タップで展開</p>
+          </div>
+          <ChevronDown v-if="!tagsExpanded" class="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" />
+          <ChevronUp v-else class="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" />
+        </button>
+        <div v-show="tagsExpanded" class="mt-3 grid grid-cols-4 gap-1.5 sm:grid-cols-4 sm:gap-2 md:grid-cols-6">
+          <div v-for="tag in tags" :key="tag" class="rounded-lg bg-surface px-1.5 py-1.5 text-center sm:px-2 sm:py-2">
+            <p class="truncate text-[9px] text-ink-muted sm:text-[10px]">{{ tag }}</p>
+            <p class="font-display text-base tabular-nums sm:text-lg">{{ me.tags?.[tag] || 0 }}</p>
+            <div class="mt-0.5 flex justify-center gap-1 sm:mt-1">
+              <RepeatPressButton
+                class="rounded bg-surface-border px-1.5 text-xs"
+                :disabled="!connected"
+                @press="$emit('tag', { tag, delta: -1 })"
+              >
+                −
+              </RepeatPressButton>
+              <RepeatPressButton
+                class="rounded bg-surface-border px-1.5 text-xs"
+                :disabled="!connected"
+                @press="$emit('tag', { tag, delta: 1 })"
+              >
+                +
+              </RepeatPressButton>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. アクション管理 — スクロールして資源パネル等を見ていても見失わないようsticky表示 -->
+      <div
+        v-if="state.phase === 'ACTION' || state.phase === 'PRODUCTION_WAIT'"
+        class="sticky top-2 z-20 mb-4 rounded-2xl border border-mars/40 bg-surface-raised/95 p-3 shadow-toast backdrop-blur"
+      >
         <div class="flex flex-wrap items-center justify-between gap-2">
           <div class="text-sm">
             <template v-if="state.phase === 'PRODUCTION_WAIT'">
@@ -272,247 +357,191 @@ function onProject(p) {
           </span>
         </div>
       </div>
-    </header>
 
-    <!-- Global Parameters Bar -->
-    <div class="mb-4">
-      <GlobalParamsBar
-        :global-params="state.global_params"
-        :is-host="isHost"
-        @update-param="(p) => $emit('global-param', p)"
-        @open-config="configModalOpen = true"
-      />
-    </div>
-
-    <!-- Global Parameters Config Modal -->
-    <GlobalParamConfigModal
-      :open="configModalOpen"
-      :is-host="isHost"
-      :global-params="state.global_params"
-      @save="(p) => $emit('configure-global-params', p)"
-      @close="configModalOpen = false"
-    />
-
-    <!-- Research -->
-    <section
-      v-if="state.phase === 'RESEARCH'"
-      class="mb-4 rounded-2xl border border-cyan-900/40 bg-cyan-950/20 p-4"
-    >
-      <h2 class="font-display text-sm tracking-wide text-cyan-200">研究フェイズ — カード購入</h2>
-      <p class="mt-1 text-sm text-ink-muted">
-        {{ useCardBuyKeypad ? '初期手札10枚想定。' : '4枚ドロー想定。' }}3 MC / 枚。
-      </p>
-      <div v-if="!me.research_done" class="mt-3 flex flex-wrap items-center gap-3">
+      <!-- 4. 標準プロジェクト -->
+      <div class="mb-4 rounded-2xl border border-surface-border bg-surface-raised/80 p-4">
         <button
-          v-if="useCardBuyKeypad"
           type="button"
-          class="rounded-lg border border-surface-border bg-surface px-4 py-1.5 font-display text-xl font-bold tabular-nums hover:border-cyan-500"
-          title="タップして購入枚数を入力"
-          @click="cardBuyKeypadOpen = true"
+          class="flex w-full items-start justify-between gap-3 text-left"
+          :aria-expanded="projectsExpanded"
+          @click="projectsExpanded = !projectsExpanded"
         >
-          {{ cardBuy }}
+          <div class="min-w-0">
+            <h3 class="font-display text-xs tracking-wide text-ink-muted">Conversions / Standard Projects</h3>
+            <p v-if="!projectsExpanded" class="mt-1 text-xs text-ink-muted">タップで展開</p>
+          </div>
+          <ChevronDown v-if="!projectsExpanded" class="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" />
+          <ChevronUp v-else class="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" />
         </button>
-        <div v-else class="flex gap-1.5" role="radiogroup" aria-label="購入枚数">
-          <button
-            v-for="n in cardBuyOptions"
-            :key="n"
-            type="button"
-            role="radio"
-            :aria-checked="cardBuy === n"
-            class="h-9 w-9 rounded-full text-sm font-semibold transition"
-            :class="cardBuy === n ? 'bg-cyan-600 text-white' : 'bg-surface text-ink-muted hover:bg-surface-border hover:text-ink'"
-            @click="cardBuy = n"
-          >
-            {{ n }}
-          </button>
+        <div v-show="projectsExpanded" class="mt-3">
+          <div class="flex flex-wrap gap-2">
+            <button
+              type="button"
+              class="inline-flex items-center gap-2 rounded-xl border border-emerald-800/60 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-200 disabled:opacity-40"
+              :disabled="!isMyTurn"
+              @click="$emit('shortcut', 'greenery')"
+            >
+              <Leaf class="h-4 w-4" />
+              植物8 → 緑化
+            </button>
+            <button
+              type="button"
+              class="inline-flex items-center gap-2 rounded-xl border border-orange-800/60 bg-orange-950/40 px-3 py-2 text-sm text-orange-200 disabled:opacity-40"
+              :disabled="!isMyTurn"
+              @click="$emit('shortcut', 'temperature')"
+            >
+              <Flame class="h-4 w-4" />
+              発熱8 → 温度
+            </button>
+          </div>
+          <div class="mt-2 flex flex-wrap items-center gap-2">
+            <label class="text-xs text-ink-muted">
+              売却枚数
+              <input v-model.number="sellCount" type="number" min="1" max="20" class="ml-1 w-14 rounded border border-surface-border bg-surface px-2 py-1" />
+            </label>
+            <button
+              v-for="p in projects"
+              :key="p.kind"
+              type="button"
+              class="rounded-lg border border-surface-border bg-surface px-2.5 py-1.5 text-xs hover:border-mars disabled:opacity-40"
+              :disabled="!isMyTurn"
+              :title="p.cost"
+              @click="onProject(p)"
+            >
+              {{ p.label }}
+              <span class="text-ink-muted">({{ p.cost }})</span>
+            </button>
+          </div>
+          <p v-if="state.phase === 'ACTION' && !isMyTurn" class="mt-2 text-xs text-ink-muted">
+            標準プロジェクト／変換は自分の手番のみ（資源の手動調整はいつでも可）
+          </p>
         </div>
-        <span class="text-sm text-ink-muted">= {{ cardBuy * 3 }} MC</span>
+      </div>
+
+      <!-- 5. 研究フェーズパネル — 自分の購入が完了したらアコーディオンで折りたたむ -->
+      <section
+        v-if="state.phase === 'RESEARCH'"
+        class="mb-4 rounded-2xl border border-cyan-900/40 bg-cyan-950/20 p-4"
+      >
         <button
           type="button"
-          class="rounded-xl bg-cyan-700 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-600"
-          @click="$emit('buy-cards', cardBuy)"
+          class="flex w-full items-start justify-between gap-3 text-left"
+          :aria-expanded="researchExpanded"
+          @click="researchExpanded = !researchExpanded"
         >
-          購入確定
-        </button>
-
-        <CountKeypad
-          v-if="cardBuyKeypadOpen"
-          title="購入枚数"
-          :min="0"
-          :max="maxCardsBuy"
-          @submit="submitCardBuyKeypad"
-          @cancel="cardBuyKeypadOpen = false"
-        />
-      </div>
-      <p v-else class="mt-3 text-sm text-emerald-300">購入済み — 他プレイヤー待ち</p>
-      <ul class="mt-3 flex flex-wrap gap-2 text-xs">
-        <li
-          v-for="p in orderedPlayers"
-          :key="p.id"
-          class="rounded-md border border-surface-border px-2 py-1"
-          :class="p.research_done ? 'text-emerald-300' : 'text-ink-muted'"
-        >
-          {{ p.name }}: {{ p.research_done ? '済' : '未' }}
-        </li>
-      </ul>
-    </section>
-
-    <!-- VP helper -->
-    <VPHelper
-      v-if="state.phase === 'ENDED'"
-      :players="orderedPlayers"
-      :player-id="playerId"
-      :score-fields="scoreFields"
-      @score="(p) => $emit('score', p)"
-    />
-
-    <div v-if="state.phase !== 'ENDED'" class="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-      <section>
-        <h2 class="mb-3 font-display text-sm tracking-wide text-ink-muted">My Board</h2>
-
-        <div class="mb-4 rounded-2xl border border-surface-border bg-surface-raised/80 p-4">
-          <button
-            type="button"
-            class="flex w-full items-start justify-between gap-3 text-left"
-            :aria-expanded="projectsExpanded"
-            @click="projectsExpanded = !projectsExpanded"
-          >
-            <div class="min-w-0">
-              <h3 class="font-display text-xs tracking-wide text-ink-muted">Conversions / Standard Projects</h3>
-              <p v-if="!projectsExpanded" class="mt-1 text-xs text-ink-muted">タップで展開</p>
-            </div>
-            <ChevronDown v-if="!projectsExpanded" class="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" />
-            <ChevronUp v-else class="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" />
-          </button>
-          <div v-show="projectsExpanded" class="mt-3">
-            <div class="flex flex-wrap gap-2">
-              <button
-                type="button"
-                class="inline-flex items-center gap-2 rounded-xl border border-emerald-800/60 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-200 disabled:opacity-40"
-                :disabled="!isMyTurn"
-                @click="$emit('shortcut', 'greenery')"
-              >
-                <Leaf class="h-4 w-4" />
-                植物8 → 緑化
-              </button>
-              <button
-                type="button"
-                class="inline-flex items-center gap-2 rounded-xl border border-orange-800/60 bg-orange-950/40 px-3 py-2 text-sm text-orange-200 disabled:opacity-40"
-                :disabled="!isMyTurn"
-                @click="$emit('shortcut', 'temperature')"
-              >
-                <Flame class="h-4 w-4" />
-                発熱8 → 温度
-              </button>
-            </div>
-            <div class="mt-2 flex flex-wrap items-center gap-2">
-              <label class="text-xs text-ink-muted">
-                売却枚数
-                <input v-model.number="sellCount" type="number" min="1" max="20" class="ml-1 w-14 rounded border border-surface-border bg-surface px-2 py-1" />
-              </label>
-              <button
-                v-for="p in projects"
-                :key="p.kind"
-                type="button"
-                class="rounded-lg border border-surface-border bg-surface px-2.5 py-1.5 text-xs hover:border-mars disabled:opacity-40"
-                :disabled="!isMyTurn"
-                :title="p.cost"
-                @click="onProject(p)"
-              >
-                {{ p.label }}
-                <span class="text-ink-muted">({{ p.cost }})</span>
-              </button>
-            </div>
-            <p v-if="state.phase === 'ACTION' && !isMyTurn" class="mt-2 text-xs text-ink-muted">
-              標準プロジェクト／変換は自分の手番のみ（資源の手動調整はいつでも可）
+          <div class="min-w-0">
+            <h2 class="font-display text-sm tracking-wide text-cyan-200">研究フェイズ — カード購入</h2>
+            <p v-if="!researchExpanded" class="mt-1 text-xs text-ink-muted">
+              {{ me.research_done ? '購入済み — タップで詳細' : 'タップで展開' }}
             </p>
           </div>
-        </div>
+          <ChevronDown v-if="!researchExpanded" class="mt-0.5 h-4 w-4 shrink-0 text-cyan-200/70" />
+          <ChevronUp v-else class="mt-0.5 h-4 w-4 shrink-0 text-cyan-200/70" />
+        </button>
+        <div v-show="researchExpanded" class="mt-3">
+          <p class="text-sm text-ink-muted">
+            {{ useCardBuyKeypad ? '初期手札10枚想定。' : '4枚ドロー想定。' }}3 MC / 枚。
+          </p>
+          <div v-if="!me.research_done" class="mt-3 flex flex-wrap items-center gap-3">
+            <button
+              v-if="useCardBuyKeypad"
+              type="button"
+              class="rounded-lg border border-surface-border bg-surface px-4 py-1.5 font-display text-xl font-bold tabular-nums hover:border-cyan-500"
+              title="タップして購入枚数を入力"
+              @click="cardBuyKeypadOpen = true"
+            >
+              {{ cardBuy }}
+            </button>
+            <div v-else class="flex gap-1.5" role="radiogroup" aria-label="購入枚数">
+              <button
+                v-for="n in cardBuyOptions"
+                :key="n"
+                type="button"
+                role="radio"
+                :aria-checked="cardBuy === n"
+                class="h-9 w-9 rounded-full text-sm font-semibold transition"
+                :class="cardBuy === n ? 'bg-cyan-600 text-white' : 'bg-surface text-ink-muted hover:bg-surface-border hover:text-ink'"
+                @click="cardBuy = n"
+              >
+                {{ n }}
+              </button>
+            </div>
+            <span class="text-sm text-ink-muted">= {{ cardBuy * 3 }} MC</span>
+            <button
+              type="button"
+              class="rounded-xl bg-cyan-700 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-600"
+              @click="$emit('buy-cards', cardBuy)"
+            >
+              購入確定
+            </button>
 
-        <div class="mb-4 rounded-2xl border border-surface-border bg-surface-raised/70 p-4">
-          <button
-            type="button"
-            class="flex w-full items-start justify-between gap-3 text-left"
-            :aria-expanded="tagsExpanded"
-            @click="tagsExpanded = !tagsExpanded"
-          >
-            <div class="min-w-0">
-              <h3 class="font-display text-xs tracking-wide text-ink-muted">Tags</h3>
-              <p v-if="!tagsExpanded && tagSummary.length" class="mt-1 truncate text-xs text-ink">
-                {{ tagSummary.join(' · ') }}
-              </p>
-              <p v-else-if="!tagsExpanded" class="mt-1 text-xs text-ink-muted">タップで展開</p>
-            </div>
-            <ChevronDown v-if="!tagsExpanded" class="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" />
-            <ChevronUp v-else class="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" />
-          </button>
-          <div v-show="tagsExpanded" class="mt-3 grid grid-cols-4 gap-1.5 sm:grid-cols-4 sm:gap-2 md:grid-cols-6">
-            <div v-for="tag in tags" :key="tag" class="rounded-lg bg-surface px-1.5 py-1.5 text-center sm:px-2 sm:py-2">
-              <p class="truncate text-[9px] text-ink-muted sm:text-[10px]">{{ tag }}</p>
-              <p class="font-display text-base tabular-nums sm:text-lg">{{ me.tags?.[tag] || 0 }}</p>
-              <div class="mt-0.5 flex justify-center gap-1 sm:mt-1">
-                <RepeatPressButton
-                  class="rounded bg-surface-border px-1.5 text-xs"
-                  :disabled="!connected"
-                  @press="$emit('tag', { tag, delta: -1 })"
-                >
-                  −
-                </RepeatPressButton>
-                <RepeatPressButton
-                  class="rounded bg-surface-border px-1.5 text-xs"
-                  :disabled="!connected"
-                  @press="$emit('tag', { tag, delta: 1 })"
-                >
-                  +
-                </RepeatPressButton>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="rounded-2xl border border-surface-border bg-surface-raised/70 p-4">
-          <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <div class="flex min-w-0 items-center gap-3">
-              <span class="h-3.5 w-3.5 shrink-0 rounded-full" :style="{ backgroundColor: me.color }" />
-              <p class="truncate font-semibold">
-                {{ me.name }}
-                <span v-if="me.passed" class="ml-1 text-xs text-red-300">PASS</span>
-              </p>
-            </div>
-            <!-- 自分のTRは他参加者パネル(text-xs)より大きく、±も一回り大きくして目立たせる -->
-            <div class="flex items-center gap-2">
-              <div class="text-right leading-none">
-                <p class="text-[10px] uppercase tracking-wider text-ink-muted">TR</p>
-                <p class="font-display text-3xl font-bold tabular-nums">{{ me.tr }}</p>
-              </div>
-              <div class="flex gap-1">
-                <RepeatPressButton
-                  v-for="d in [-1, 1]"
-                  :key="'tr' + d"
-                  class="rounded-lg bg-surface-border px-2.5 py-1.5 text-sm font-semibold hover:bg-mars"
-                  :disabled="!connected"
-                  @press="$emit('update', { target: 'tr', delta: d })"
-                >
-                  {{ d > 0 ? '+' : '' }}{{ d }}
-                </RepeatPressButton>
-              </div>
-            </div>
-          </div>
-          <div class="grid grid-cols-3 gap-2 sm:grid-cols-6">
-            <ResourceCard
-              v-for="key in resourceOrder"
-              :key="key"
-              :resource-key="key"
-              :meta="resourceMeta[key]"
-              :stock="me.resources?.[key]?.stock ?? 0"
-              :production="me.resources?.[key]?.production ?? 0"
-              :interactive="connected"
-              @change="(p) => $emit('update', p)"
+            <CountKeypad
+              v-if="cardBuyKeypadOpen"
+              title="購入枚数"
+              :min="0"
+              :max="maxCardsBuy"
+              @submit="submitCardBuyKeypad"
+              @cancel="cardBuyKeypadOpen = false"
             />
           </div>
+          <p v-else class="mt-3 text-sm text-emerald-300">購入済み — 他プレイヤー待ち</p>
+          <ul class="mt-3 flex flex-wrap gap-2 text-xs">
+            <li
+              v-for="p in orderedPlayers"
+              :key="p.id"
+              class="rounded-md border border-surface-border px-2 py-1"
+              :class="p.research_done ? 'text-emerald-300' : 'text-ink-muted'"
+            >
+              {{ p.name }}: {{ p.research_done ? '済' : '未' }}
+            </li>
+          </ul>
         </div>
       </section>
 
+      <!-- 6. 資源パネル -->
+      <div class="mb-4 rounded-2xl border border-surface-border bg-surface-raised/70 p-4">
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div class="flex min-w-0 items-center gap-3">
+            <span class="h-3.5 w-3.5 shrink-0 rounded-full" :style="{ backgroundColor: me.color }" />
+            <p class="truncate font-semibold">
+              {{ me.name }}
+              <span v-if="me.passed" class="ml-1 text-xs text-red-300">PASS</span>
+            </p>
+          </div>
+          <!-- 自分のTRは他参加者パネル(text-xs)より大きく、±も一回り大きくして目立たせる -->
+          <div class="flex items-center gap-2">
+            <div class="text-right leading-none">
+              <p class="text-[10px] uppercase tracking-wider text-ink-muted">TR</p>
+              <p class="font-display text-3xl font-bold tabular-nums">{{ me.tr }}</p>
+            </div>
+            <div class="flex gap-1">
+              <RepeatPressButton
+                v-for="d in [-1, 1]"
+                :key="'tr' + d"
+                class="rounded-lg bg-surface-border px-2.5 py-1.5 text-sm font-semibold hover:bg-mars"
+                :disabled="!connected"
+                @press="$emit('update', { target: 'tr', delta: d })"
+              >
+                {{ d > 0 ? '+' : '' }}{{ d }}
+              </RepeatPressButton>
+            </div>
+          </div>
+        </div>
+        <div class="grid grid-cols-3 gap-2 sm:grid-cols-6">
+          <ResourceCard
+            v-for="key in resourceOrder"
+            :key="key"
+            :resource-key="key"
+            :meta="resourceMeta[key]"
+            :stock="me.resources?.[key]?.stock ?? 0"
+            :production="me.resources?.[key]?.production ?? 0"
+            :interactive="connected"
+            @change="(p) => $emit('update', p)"
+          />
+        </div>
+      </div>
+
+      <!-- 7. 他メンバー資源パネルなど -->
       <section>
         <h2 class="mb-3 font-display text-sm tracking-wide text-ink-muted">Opponents</h2>
         <div class="space-y-3">
@@ -535,7 +564,7 @@ function onProject(p) {
           </p>
         </div>
       </section>
-    </div>
+    </template>
   </div>
 </template>
 
