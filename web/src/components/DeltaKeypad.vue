@@ -37,8 +37,8 @@ function submit(sign) {
     >
       <div class="w-full max-w-[280px] rounded-2xl border border-surface-border bg-surface-raised p-4 shadow-toast">
         <div class="mb-3 flex items-center justify-between gap-2">
-          <p class="text-xs text-ink-muted">
-            {{ title }}<span v-if="currentValue !== null">（現在 {{ currentValue }}）</span>を増減
+          <p class="text-base font-semibold text-ink">
+            {{ title }}<span v-if="currentValue !== null" class="text-sm font-normal text-ink-muted">（現在 {{ currentValue }}）</span>
           </p>
           <button
             type="button"

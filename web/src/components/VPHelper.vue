@@ -1,6 +1,6 @@
 <script setup>
-import { computed } from 'vue'
-import RepeatPressButton from './RepeatPressButton.vue'
+import { computed, ref } from 'vue'
+import DeltaKeypad from './DeltaKeypad.vue'
 
 const props = defineProps({
   players: { type: Array, required: true },
@@ -31,13 +31,32 @@ const ranked = computed(() =>
     .map((p) => ({ player: p, total: calcTotal(p) }))
     .sort((a, b) => b.total - a.total),
 )
+
+const myPlayer = computed(() => props.players.find((p) => p.id === props.playerId) || null)
+
+// 開いているスコアフィールド({ field, label }) — nullでテンキー非表示
+const activeField = ref(null)
+
+function openKeypad(field) {
+  activeField.value = field
+}
+
+const activeFieldValue = computed(() =>
+  activeField.value ? scoreValue(myPlayer.value, activeField.value.field) : 0,
+)
+
+function submitScoreDelta(delta) {
+  const field = activeField.value
+  activeField.value = null
+  emit('score', { field: field.field, delta })
+}
 </script>
 
 <template>
   <section class="mb-4 rounded-2xl border border-amber-500/40 bg-[#1a1620] p-4 text-ink shadow-toast sm:p-6">
     <h2 class="font-display text-lg tracking-wide text-amber-300">VP ヘルパ</h2>
     <p class="mt-1 text-sm text-ink-muted">
-      TR は自動反映。緑化・都市・賞などは自分の行だけ +/- で調整できます（長押しで連続増減）。
+      TR は自動反映。緑化・都市・賞などは自分の行の数値をタップし、テンキーで調整できます。
     </p>
 
     <div class="mt-4 space-y-4">
@@ -69,26 +88,27 @@ const ranked = computed(() =>
             class="rounded-lg bg-surface px-3 py-2"
           >
             <p class="text-[10px] uppercase tracking-wider text-ink-muted">{{ f.label }}</p>
-            <div class="mt-1 flex items-center gap-2">
-              <p class="font-display text-xl tabular-nums">{{ scoreValue(row.player, f.field) }}</p>
-              <template v-if="row.player.id === playerId">
-                <RepeatPressButton
-                  class="rounded-md bg-surface-border px-2 py-1 text-sm hover:bg-mars"
-                  @press="emit('score', { field: f.field, delta: -1 })"
-                >
-                  −
-                </RepeatPressButton>
-                <RepeatPressButton
-                  class="rounded-md bg-surface-border px-2 py-1 text-sm hover:bg-mars"
-                  @press="emit('score', { field: f.field, delta: 1 })"
-                >
-                  +
-                </RepeatPressButton>
-              </template>
-            </div>
+            <button
+              v-if="row.player.id === playerId"
+              type="button"
+              class="mt-1 font-display text-xl font-bold tabular-nums hover:text-mars-glow"
+              title="タップして増減値を直接入力"
+              @click="openKeypad(f)"
+            >
+              {{ scoreValue(row.player, f.field) }}
+            </button>
+            <p v-else class="mt-1 font-display text-xl tabular-nums">{{ scoreValue(row.player, f.field) }}</p>
           </div>
         </div>
       </article>
     </div>
+
+    <DeltaKeypad
+      v-if="activeField"
+      :title="activeField.label"
+      :current-value="activeFieldValue"
+      @submit="submitScoreDelta"
+      @cancel="activeField = null"
+    />
   </section>
 </template>

@@ -39,10 +39,13 @@ const cardBuy = ref(0)
 const cardBuyKeypadOpen = ref(false)
 const sellCount = ref(1)
 const tagsExpanded = ref(false)
+const projectsExpanded = ref(false)
 const configModalOpen = ref(false)
 
 onMounted(() => {
-  tagsExpanded.value = window.matchMedia('(min-width: 640px)').matches
+  const isDesktop = window.matchMedia('(min-width: 640px)').matches
+  tagsExpanded.value = isDesktop
+  projectsExpanded.value = isDesktop
 })
 
 // Generation 1 deals a larger starting hand (up to 10); later generations cap at 4.
@@ -365,36 +368,23 @@ function onProject(p) {
 
     <div v-if="state.phase !== 'ENDED'" class="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
       <section>
-        <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 class="font-display text-sm tracking-wide text-ink-muted">My Board</h2>
-          <div class="flex items-center gap-2">
-            <span class="h-3 w-3 rounded-full" :style="{ backgroundColor: me.color }" />
-            <span class="font-semibold">{{ me.name }}</span>
-            <span v-if="me.passed" class="text-xs text-red-300">PASSED</span>
-          </div>
-        </div>
+        <h2 class="mb-3 font-display text-sm tracking-wide text-ink-muted">My Board</h2>
 
         <div class="mb-4 rounded-2xl border border-surface-border bg-surface-raised/80 p-4">
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p class="text-[10px] uppercase tracking-wider text-ink-muted">Terraforming Rating</p>
-              <p class="font-display text-4xl font-bold tabular-nums">{{ me.tr }}</p>
+          <button
+            type="button"
+            class="flex w-full items-start justify-between gap-3 text-left"
+            :aria-expanded="projectsExpanded"
+            @click="projectsExpanded = !projectsExpanded"
+          >
+            <div class="min-w-0">
+              <h3 class="font-display text-xs tracking-wide text-ink-muted">Conversions / Standard Projects</h3>
+              <p v-if="!projectsExpanded" class="mt-1 text-xs text-ink-muted">タップで展開</p>
             </div>
-            <div class="flex flex-wrap gap-1.5">
-              <RepeatPressButton
-                v-for="d in [-1, 1]"
-                :key="'tr' + d"
-                class="rounded-lg bg-surface px-3 py-2 text-sm font-semibold hover:bg-surface-border"
-                :disabled="!connected"
-                @press="$emit('update', { target: 'tr', delta: d })"
-              >
-                {{ d > 0 ? '+' : '' }}{{ d }}
-              </RepeatPressButton>
-            </div>
-          </div>
-
-          <div class="mt-4">
-            <p class="mb-2 text-[10px] uppercase tracking-wider text-ink-muted">Conversions / Standard Projects</p>
+            <ChevronDown v-if="!projectsExpanded" class="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" />
+            <ChevronUp v-else class="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" />
+          </button>
+          <div v-show="projectsExpanded" class="mt-3">
             <div class="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -480,17 +470,46 @@ function onProject(p) {
           </div>
         </div>
 
-        <div class="resource-grid grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <ResourceCard
-            v-for="key in resourceOrder"
-            :key="key"
-            :resource-key="key"
-            :meta="resourceMeta[key]"
-            :stock="me.resources?.[key]?.stock ?? 0"
-            :production="me.resources?.[key]?.production ?? 0"
-            :interactive="connected"
-            @change="(p) => $emit('update', p)"
-          />
+        <div class="rounded-2xl border border-surface-border bg-surface-raised/70 p-4">
+          <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex min-w-0 items-center gap-3">
+              <span class="h-3.5 w-3.5 shrink-0 rounded-full" :style="{ backgroundColor: me.color }" />
+              <p class="truncate font-semibold">
+                {{ me.name }}
+                <span v-if="me.passed" class="ml-1 text-xs text-red-300">PASS</span>
+              </p>
+            </div>
+            <!-- 自分のTRは他参加者パネル(text-xs)より大きく、±も一回り大きくして目立たせる -->
+            <div class="flex items-center gap-2">
+              <div class="text-right leading-none">
+                <p class="text-[10px] uppercase tracking-wider text-ink-muted">TR</p>
+                <p class="font-display text-3xl font-bold tabular-nums">{{ me.tr }}</p>
+              </div>
+              <div class="flex gap-1">
+                <RepeatPressButton
+                  v-for="d in [-1, 1]"
+                  :key="'tr' + d"
+                  class="rounded-lg bg-surface-border px-2.5 py-1.5 text-sm font-semibold hover:bg-mars"
+                  :disabled="!connected"
+                  @press="$emit('update', { target: 'tr', delta: d })"
+                >
+                  {{ d > 0 ? '+' : '' }}{{ d }}
+                </RepeatPressButton>
+              </div>
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-2 sm:grid-cols-6">
+            <ResourceCard
+              v-for="key in resourceOrder"
+              :key="key"
+              :resource-key="key"
+              :meta="resourceMeta[key]"
+              :stock="me.resources?.[key]?.stock ?? 0"
+              :production="me.resources?.[key]?.production ?? 0"
+              :interactive="connected"
+              @change="(p) => $emit('update', p)"
+            />
+          </div>
         </div>
       </section>
 
@@ -520,16 +539,3 @@ function onProject(p) {
   </div>
 </template>
 
-<style scoped>
-/* スマホ横画面(iPhone SEなど幅568px程度の端末を含む)では sm: の
-   640px幅ブレークポイントに届かず1列(6行)のままになる。基本6資源を
-   横画面時は必ず2x3で並べたいので、幅に関わらずorientationで2列を強制する。
-   1024px以上(タブレット横画面〜PC)はxl:grid-cols-3など既存の幅ベースの
-   レイアウトを尊重し、対象外とする。 */
-@media (orientation: landscape) and (max-width: 1023px) {
-  .resource-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px;
-  }
-}
-</style>
