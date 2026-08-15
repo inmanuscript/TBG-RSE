@@ -29,7 +29,7 @@ function submitKeypad(delta) {
   <div>
     <button
       type="button"
-      class="font-display text-3xl font-bold tabular-nums leading-none disabled:pointer-events-none disabled:opacity-60"
+      class="stepper-value font-display text-3xl font-bold tabular-nums leading-none disabled:pointer-events-none disabled:opacity-60"
       :class="valueClass"
       :disabled="disabled"
       title="タップして増減値を直接入力"
@@ -38,16 +38,16 @@ function submitKeypad(delta) {
       {{ displayValue }}
     </button>
 
-    <div class="mt-2 flex gap-1">
+    <div class="stepper-controls mt-2 flex gap-1">
       <RepeatPressButton
-        class="flex-1 rounded-md bg-surface px-1 py-1.5 text-xs font-semibold text-ink hover:bg-surface-border"
+        class="stepper-btn flex-1 rounded-md bg-surface px-1 py-1.5 text-xs font-semibold text-ink hover:bg-surface-border"
         :disabled="disabled"
         @press="emit('delta', -1)"
       >
         −1
       </RepeatPressButton>
       <RepeatPressButton
-        class="flex-1 rounded-md bg-surface px-1 py-1.5 text-xs font-semibold text-ink hover:bg-surface-border"
+        class="stepper-btn flex-1 rounded-md bg-surface px-1 py-1.5 text-xs font-semibold text-ink hover:bg-surface-border"
         :disabled="disabled"
         @press="emit('delta', 1)"
       >
@@ -64,3 +64,22 @@ function submitKeypad(delta) {
     />
   </div>
 </template>
+
+<style scoped>
+/* ResourceCard専用(NumberStepperの唯一の利用箇所)。横画面ではカードごと
+   詰めるため、数値とボタンもひとまわり小さくして高さを抑える。 */
+@media (orientation: landscape) and (max-width: 1023px) {
+  .stepper-value {
+    font-size: 19px;
+  }
+  .stepper-controls {
+    margin-top: 3px;
+    gap: 3px;
+  }
+  .stepper-btn {
+    padding-top: 2px;
+    padding-bottom: 2px;
+    font-size: 10px;
+  }
+}
+</style>

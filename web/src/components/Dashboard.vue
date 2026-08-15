@@ -529,6 +529,7 @@ function onProject(p) {
 @media (orientation: landscape) and (max-width: 1023px) {
   .resource-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
   }
 }
 </style>
