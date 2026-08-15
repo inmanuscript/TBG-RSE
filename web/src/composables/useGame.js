@@ -309,7 +309,7 @@ export function useGame() {
         finalValue: parsed?.finalValue ?? null,
       },
       ...activity.value,
-    ].slice(0, 100)
+    ]
   }
 
   // Records every notification to the activity log (self included); only pops a

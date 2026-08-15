@@ -39,7 +39,9 @@ const (
 	InitialTR           = 20
 	InitialGeneration   = 1
 	MCProductionMin     = -5
-	AuditLogLimit       = 200
+	// AuditLogLimit caps in-memory / persisted audit entries per room.
+	// 0 means unlimited (local LAN play; a full session stays modest).
+	AuditLogLimit = 0
 	ShortcutCost        = 8
 	MaxActionsPerTurn   = 2
 	CardBuyCost         = 3

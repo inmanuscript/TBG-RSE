@@ -73,6 +73,19 @@ function kindColor(item) {
 function kindIcon(item) {
   return item.kind === 'resource' ? RESOURCE_ICONS[item.resource] : null
 }
+
+function targetLabel(item) {
+  if (item.kind !== 'resource' || !item.target) return ''
+  return item.target === 'production' ? 'Prod' : 'Stock'
+}
+
+/** Strip leading "PlayerName " from free-text messages when already shown in the row. */
+function bodyMessage(item) {
+  const msg = item.message || ''
+  const prefix = `${item.playerName} `
+  if (item.playerName && msg.startsWith(prefix)) return msg.slice(prefix.length)
+  return msg
+}
 </script>
 
 <template>
@@ -83,6 +96,7 @@ function kindIcon(item) {
           <div class="flex items-center gap-2 font-display text-sm tracking-wide">
             <ScrollText class="h-4 w-4 text-mars" />
             Activity
+            <span class="font-sans text-[11px] font-normal tabular-nums text-ink-muted">{{ filteredItems.length }}</span>
           </div>
           <button type="button" class="rounded-lg p-2 hover:bg-surface-raised" @click="$emit('close')">
             <X class="h-4 w-4" />
@@ -120,38 +134,51 @@ function kindIcon(item) {
           </button>
         </div>
 
-        <ul class="flex-1 space-y-2 overflow-y-auto p-4">
+        <ul class="flex-1 overflow-y-auto px-2 py-1">
           <li
             v-for="item in filteredItems"
             :key="item.id"
-            class="rounded-xl border border-surface-border bg-surface-raised/60 px-3 py-2"
+            class="grid grid-cols-[4.25rem_0.375rem_minmax(0,4.5rem)_minmax(0,1fr)_auto] items-baseline gap-x-1.5 border-b border-surface-border/60 px-2 py-1.5 text-[12px] leading-snug last:border-b-0"
           >
-            <div class="flex items-center justify-between gap-2">
-              <p class="flex min-w-0 items-center gap-1.5 text-[11px] text-ink-muted">
-                <span
-                  v-if="colorByName[item.playerName]"
-                  class="h-2 w-2 shrink-0 rounded-full"
-                  :style="{ backgroundColor: colorByName[item.playerName] }"
-                />
-                <span class="truncate">{{ item.timestamp }} · {{ item.playerName }}</span>
-              </p>
+            <span class="font-display text-[10px] tabular-nums text-ink-muted">
+              {{ item.timestamp }}
+            </span>
+
+            <span
+              class="mt-[0.35em] h-1.5 w-1.5 self-start rounded-full"
+              :style="{ backgroundColor: colorByName[item.playerName] || '#666' }"
+              :title="item.playerName"
+            />
+
+            <span class="truncate text-ink-muted" :title="item.playerName">
+              {{ item.playerName }}
+            </span>
+
+            <template v-if="item.delta != null">
               <span
-                v-if="kindLabel(item)"
-                class="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold"
-                :class="!kindColor(item) && 'bg-surface text-ink-muted'"
-                :style="kindColor(item) ? { color: kindColor(item), backgroundColor: kindColor(item) + '22' } : {}"
+                class="flex min-w-0 items-center gap-0.5 font-display text-[10px] font-semibold"
+                :class="!kindColor(item) && 'text-ink-muted'"
+                :style="kindColor(item) ? { color: kindColor(item) } : {}"
+                :title="[kindLabel(item), targetLabel(item)].filter(Boolean).join(' · ')"
               >
-                <component :is="kindIcon(item)" v-if="kindIcon(item)" class="h-3 w-3" />
-                {{ kindLabel(item) }}
+                <component :is="kindIcon(item)" v-if="kindIcon(item)" class="h-3 w-3 shrink-0" />
+                <span class="truncate">{{ kindLabel(item) }}</span>
+                <span v-if="targetLabel(item)" class="shrink-0 font-sans font-medium text-ink-muted">· {{ targetLabel(item) }}</span>
               </span>
-            </div>
-            <p class="text-sm">
-              <template v-if="item.delta != null">
-                <span class="font-display tabular-nums" :class="deltaClass(item.delta)">{{ formatDelta(item.delta) }}</span>
-                <span v-if="item.finalValue != null" class="ml-1 text-ink-muted">→ {{ item.finalValue }}</span>
-              </template>
-              <template v-else>{{ item.message }}</template>
-            </p>
+
+              <span class="whitespace-nowrap text-right font-display tabular-nums">
+                <span :class="deltaClass(item.delta)">{{ formatDelta(item.delta) }}</span>
+                <span v-if="item.finalValue != null" class="ml-1 text-ink-muted">→{{ item.finalValue }}</span>
+              </span>
+            </template>
+
+            <span
+              v-else
+              class="col-span-2 min-w-0 truncate text-ink"
+              :title="bodyMessage(item)"
+            >
+              {{ bodyMessage(item) }}
+            </span>
           </li>
           <li v-if="!filteredItems.length" class="py-8 text-center text-sm text-ink-muted">
             {{ items.length ? '該当するログがありません' : 'まだログがありません' }}

@@ -814,7 +814,7 @@ func (r *Room) appendAuditLocked(playerID, typ, detail string, delta map[string]
 		Detail:    detail,
 		Delta:     delta,
 	})
-	if len(r.AuditLogs) > game.AuditLogLimit {
+	if game.AuditLogLimit > 0 && len(r.AuditLogs) > game.AuditLogLimit {
 		r.AuditLogs = r.AuditLogs[len(r.AuditLogs)-game.AuditLogLimit:]
 	}
 }
