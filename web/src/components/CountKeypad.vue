@@ -63,28 +63,28 @@ function submit() {
             v-for="n in [1, 2, 3, 4, 5, 6, 7, 8, 9]"
             :key="n"
             type="button"
-            class="rounded-lg bg-surface py-3 text-lg font-semibold text-ink hover:bg-surface-border"
+            class="rounded-lg bg-surface py-3 font-display text-lg font-semibold tabular-nums text-ink hover:bg-surface-border"
             @click="tapDigit(n)"
           >
             {{ n }}
           </button>
           <button
             type="button"
-            class="rounded-lg bg-surface py-3 text-lg font-semibold text-ink hover:bg-surface-border"
+            class="rounded-lg bg-surface py-3 font-display text-lg font-semibold text-ink hover:bg-surface-border"
             @click="clearDigits"
           >
             C
           </button>
           <button
             type="button"
-            class="rounded-lg bg-surface py-3 text-lg font-semibold text-ink hover:bg-surface-border"
+            class="rounded-lg bg-surface py-3 font-display text-lg font-semibold tabular-nums text-ink hover:bg-surface-border"
             @click="tapDigit(0)"
           >
             0
           </button>
           <button
             type="button"
-            class="rounded-lg bg-cyan-700 py-3 text-lg font-semibold text-white hover:bg-cyan-600"
+            class="rounded-lg bg-cyan-700 py-3 font-display text-lg font-semibold text-white hover:bg-cyan-600"
             @click="submit"
           >
             確定

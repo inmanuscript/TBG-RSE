@@ -1,12 +1,15 @@
 # Binaries / local DB
 /tbg-rse
 /tbg-rse.exe
+/tbg-rse-*.exe
+/*.exe
 /*.db
 /*.db-*
 
-# Frontend
+# Frontend (Vite outDir is webui/dist via web/vite.config.js)
 web/node_modules/
 web/dist/
+webui/dist/
 
 # OS / IDE
 .DS_Store
