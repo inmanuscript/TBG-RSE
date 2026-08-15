@@ -33,6 +33,7 @@ type roomExtras struct {
 	ActionsThisTurn  int                            `json:"actions_this_turn"`
 	FirstPlayerIndex int                            `json:"first_player_index"`
 	GlobalParams     map[string]game.GlobalParamDef `json:"global_params,omitempty"`
+	GameStarted      bool                           `json:"game_started"`
 }
 
 type playerExtras struct {
@@ -118,6 +119,7 @@ func (s *Store) SaveRoom(code, hostPlayerID string, state game.GameState, tokens
 		ActionsThisTurn:  state.ActionsThisTurn,
 		FirstPlayerIndex: state.FirstPlayerIndex,
 		GlobalParams:     state.GlobalParams,
+		GameStarted:      state.GameStarted,
 	})
 	if err != nil {
 		return err
@@ -232,6 +234,7 @@ func (s *Store) LoadAllRooms() ([]PersistedRoom, error) {
 		pr.State.ActivePlayerID = rex.ActivePlayerID
 		pr.State.ActionsThisTurn = rex.ActionsThisTurn
 		pr.State.FirstPlayerIndex = rex.FirstPlayerIndex
+		pr.State.GameStarted = rex.GameStarted
 		if rex.GlobalParams != nil {
 			pr.State.GlobalParams = rex.GlobalParams
 		}

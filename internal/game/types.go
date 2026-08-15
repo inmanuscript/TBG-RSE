@@ -23,8 +23,16 @@ const (
 )
 
 // AllowNewJoin reports whether a brand-new player may join the room.
+//
+// Gated on GameStarted rather than Phase/Generation: in a room where only
+// the host has joined so far, the host finishing their own research alone
+// advances Phase to ACTION (see MaybeFinishResearch) purely because "every
+// current player" is done — nobody has actually played a turn yet. Locking
+// out new joins at that point would strand anyone still trying to join via
+// the shared room code. GameStarted only flips once someone actually claims
+// or passes a turn (see ClaimAction/Pass in production.go).
 func AllowNewJoin(state *GameState) bool {
-	return state != nil && state.Phase == PhaseResearch && state.Generation == 1
+	return state != nil && state.Phase != PhaseEnded && !state.GameStarted
 }
 
 const (
@@ -89,6 +97,11 @@ type PlayerState struct {
 	IsReady      bool                           `json:"is_ready"`
 	Passed       bool                           `json:"passed"`
 	ResearchDone bool                           `json:"research_done"`
+	// Online reflects live WebSocket connectivity, not saved game data. It's
+	// recomputed by the room layer on every outbound broadcast (see
+	// Room.cloneStateWithPresenceLocked) and always false on a value read
+	// straight from GameState/the store — never set by game logic itself.
+	Online       bool                           `json:"online"`
 	Resources    map[ResourceType]ResourceState `json:"resources"`
 	Tags         map[string]int                 `json:"tags"`
 	Score        ScoreSheet                     `json:"score"`
@@ -180,6 +193,9 @@ type GameState struct {
 	ActionsThisTurn  int                       `json:"actions_this_turn"`
 	FirstPlayerIndex int                       `json:"first_player_index"`
 	GlobalParams     map[string]GlobalParamDef `json:"global_params"`
+	// GameStarted becomes true once someone actually claims or passes a
+	// turn (see ClaimAction/Pass). Drives AllowNewJoin — see its doc comment.
+	GameStarted bool `json:"game_started"`
 }
 
 type AuditLog struct {
@@ -236,6 +252,7 @@ func CloneGameState(src GameState) GameState {
 		ActionsThisTurn:  src.ActionsThisTurn,
 		FirstPlayerIndex: src.FirstPlayerIndex,
 		GlobalParams:     make(map[string]GlobalParamDef, len(src.GlobalParams)),
+		GameStarted:      src.GameStarted,
 	}
 	for id, p := range src.Players {
 		dst.Players[id] = ClonePlayer(p)

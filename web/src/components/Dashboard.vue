@@ -32,7 +32,7 @@ const props = defineProps({
 const emit = defineEmits([
   'update', 'ready', 'shortcut', 'project', 'buy-cards',
   'end-turn', 'pass', 'claim-action', 'tag', 'score', 'end-game', 'activity', 'leave',
-  'global-param', 'configure-global-params', 'clear-error',
+  'global-param', 'configure-global-params', 'clear-error', 'skip-player',
 ])
 
 const cardBuy = ref(0)
@@ -553,6 +553,7 @@ function onProject(p) {
             :resource-meta="resourceMeta"
             :highlighted="isHighlighted(op.id)"
             :active="state.active_player_id === op.id"
+            @skip="(id) => $emit('skip-player', id)"
           />
           <p
             v-if="!opponents.length"

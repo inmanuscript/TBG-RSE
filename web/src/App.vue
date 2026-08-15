@@ -56,6 +56,7 @@ const {
   clearError,
   dismissToast,
   endGame,
+  skipPlayer,
 } = game
 
 onMounted(() => {
@@ -79,8 +80,14 @@ function onUpdate(payload) {
 }
 
 function onLeave() {
-  if (confirm('ローカルセッションをクリアしてロビーに戻りますか？（サーバー上の席は残ります）')) {
+  if (confirm('ローカルセッションをクリアしてロビーに戻りますか？（サーバー上の席は残ります。現在の操作待ちがあればスキップされます）')) {
     leaveLocal()
+  }
+}
+
+function onSkipPlayer(targetPlayerId) {
+  if (confirm('相手が応答していない場合のみ使ってください。この人の操作待ちをスキップしますか？')) {
+    skipPlayer(targetPlayerId)
   }
 }
 
@@ -137,6 +144,7 @@ function onEndGame() {
     @end-game="onEndGame"
     @activity="activityOpen = true"
     @leave="onLeave"
+    @skip-player="onSkipPlayer"
   />
   <Lobby
     v-else
