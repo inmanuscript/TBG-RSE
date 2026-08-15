@@ -480,7 +480,7 @@ function onProject(p) {
           </div>
         </div>
 
-        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div class="resource-grid grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <ResourceCard
             v-for="key in resourceOrder"
             :key="key"
@@ -519,3 +519,16 @@ function onProject(p) {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* スマホ横画面(iPhone SEなど幅568px程度の端末を含む)では sm: の
+   640px幅ブレークポイントに届かず1列(6行)のままになる。基本6資源を
+   横画面時は必ず2x3で並べたいので、幅に関わらずorientationで2列を強制する。
+   1024px以上(タブレット横画面〜PC)はxl:grid-cols-3など既存の幅ベースの
+   レイアウトを尊重し、対象外とする。 */
+@media (orientation: landscape) and (max-width: 1023px) {
+  .resource-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+</style>
