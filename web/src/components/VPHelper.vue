@@ -6,6 +6,9 @@ const props = defineProps({
   players: { type: Array, required: true },
   playerId: { type: String, required: true },
   scoreFields: { type: Array, required: true },
+  // モバイルのボトムシート内などに埋め込む場合、外枠カード(border/padding)と
+  // 見出しを省いて呼び出し側のコンテナに馴染ませる。
+  embedded: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['score'])
@@ -53,9 +56,12 @@ function submitScoreDelta(delta) {
 </script>
 
 <template>
-  <section class="mb-4 rounded-2xl border border-amber-500/40 bg-[#1a1620] p-4 text-ink shadow-toast sm:p-6">
-    <h2 class="font-display text-lg tracking-wide text-amber-300">VP ヘルパ</h2>
-    <p class="mt-1 text-sm text-ink-muted">
+  <component
+    :is="embedded ? 'div' : 'section'"
+    :class="embedded ? 'text-ink' : 'mb-4 rounded-2xl border border-amber-500/40 bg-[#1a1620] p-4 text-ink shadow-toast sm:p-6'"
+  >
+    <h2 v-if="!embedded" class="font-display text-lg tracking-wide text-amber-300">VP ヘルパ</h2>
+    <p class="text-sm text-ink-muted" :class="embedded ? '' : 'mt-1'">
       TR は自動反映。緑化・都市・賞などは自分の行の数値をタップし、テンキーで調整できます。
     </p>
 
@@ -110,5 +116,5 @@ function submitScoreDelta(delta) {
       @submit="submitScoreDelta"
       @cancel="activeField = null"
     />
-  </section>
+  </component>
 </template>
