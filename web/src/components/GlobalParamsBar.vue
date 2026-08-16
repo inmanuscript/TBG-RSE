@@ -5,6 +5,9 @@ import { Thermometer, Wind, Droplets, Globe, Sliders, Plus, Minus, Check, X, Spa
 const props = defineProps({
   globalParams: { type: Object, default: () => ({}) },
   isHost: { type: Boolean, default: false },
+  // モバイル固定ヘッダー向けの1行ストリップ表示。値と進捗バーのみで、
+  // タップすると通常表示と同じクイック編集モーダルを開く。
+  compact: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['update-param', 'open-config'])
@@ -88,77 +91,114 @@ function submitUpdate(steps) {
 </script>
 
 <template>
-  <div class="rounded-2xl border border-surface-border bg-surface-raised/80 p-3 shadow backdrop-blur">
-    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-surface-border/60 pb-2">
-      <div class="flex items-center gap-2">
-        <span class="font-display text-xs font-bold uppercase tracking-wider text-ink-muted">グローバルパラメータ</span>
-        <span
-          v-if="isAllMaxed"
-          class="inline-flex items-center gap-1 rounded-full bg-emerald-950/80 border border-emerald-500/40 px-2 py-0.5 text-[11px] font-bold text-emerald-300 animate-pulse"
+  <div :class="compact ? 'flex items-center gap-3 overflow-x-auto' : 'rounded-2xl border border-surface-border bg-surface-raised/80 p-3 shadow backdrop-blur'">
+    <template v-if="!compact">
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-surface-border/60 pb-2">
+        <div class="flex items-center gap-2">
+          <span class="font-display text-xs font-bold uppercase tracking-wider text-ink-muted">グローバルパラメータ</span>
+          <span
+            v-if="isAllMaxed"
+            class="inline-flex items-center gap-1 rounded-full bg-emerald-950/80 border border-emerald-500/40 px-2 py-0.5 text-[11px] font-bold text-emerald-300 animate-pulse"
+          >
+            🏁 最終世代 (パラメータ達成)
+          </span>
+        </div>
+        <button
+          type="button"
+          class="inline-flex items-center gap-1 rounded-lg border border-surface-border bg-surface px-2 py-1 text-xs text-ink-muted hover:border-mars hover:text-ink transition"
+          title="グローバルパラメータ設定"
+          @click="emit('open-config')"
         >
-          🏁 最終世代 (パラメータ達成)
-        </span>
+          <Sliders class="h-3.5 w-3.5 text-mars" />
+          <span>設定</span>
+        </button>
       </div>
+
+      <!-- Parameter cards grid -->
+      <div class="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+        <div
+          v-for="param in activeParams"
+          :key="param.id"
+          class="group relative flex cursor-pointer flex-col justify-between rounded-xl border p-2.5 transition hover:brightness-110 active:scale-[0.98]"
+          :class="PARAM_META[param.id]?.bgColor || 'border-surface-border bg-surface'"
+          @click="openQuickEdit(param.id)"
+        >
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1.5">
+              <component
+                :is="PARAM_META[param.id]?.icon || Globe"
+                class="h-4 w-4"
+                :class="PARAM_META[param.id]?.textColor || 'text-ink'"
+              />
+              <span class="text-xs font-semibold text-ink">
+                {{ PARAM_META[param.id]?.label || param.name }}
+              </span>
+            </div>
+            <span
+              v-if="param.current >= param.max"
+              class="rounded bg-emerald-500/20 px-1 text-[10px] font-bold text-emerald-400"
+            >
+              MAX
+            </span>
+          </div>
+
+          <div class="my-1.5 flex items-baseline justify-between">
+            <span class="font-display text-base font-bold text-ink">
+              {{ param.current }}{{ param.unit }}
+            </span>
+            <span class="text-[11px] text-ink-muted">
+              / {{ param.max }}{{ param.unit }}
+            </span>
+          </div>
+
+          <!-- Progress bar -->
+          <div class="h-1.5 w-full overflow-hidden rounded-full bg-surface-border/50">
+            <div
+              class="h-full rounded-full transition-all duration-300"
+              :class="PARAM_META[param.id]?.barColor || 'bg-mars'"
+              :style="{ width: `${getProgressPercent(param)}%` }"
+            />
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- モバイル固定ヘッダー向けストリップ: アイコン+値+細い進捗バーのみ。
+         タップで下の共通クイック編集モーダルを開く。 -->
+    <template v-else>
+      <button
+        v-for="param in activeParams"
+        :key="param.id"
+        type="button"
+        class="flex flex-none flex-col items-start gap-1 active:scale-95"
+        @click="openQuickEdit(param.id)"
+      >
+        <span
+          class="flex items-center gap-1 font-display text-sm font-bold leading-none"
+          :class="PARAM_META[param.id]?.textColor || 'text-ink'"
+        >
+          <component :is="PARAM_META[param.id]?.icon || Globe" class="h-3.5 w-3.5" />
+          {{ param.current }}{{ param.unit }}
+        </span>
+        <span class="h-[3px] w-9 overflow-hidden rounded-full bg-surface-border/60">
+          <span
+            class="block h-full rounded-full"
+            :class="PARAM_META[param.id]?.barColor || 'bg-mars'"
+            :style="{ width: `${getProgressPercent(param)}%` }"
+          />
+        </span>
+      </button>
       <button
         type="button"
-        class="inline-flex items-center gap-1 rounded-lg border border-surface-border bg-surface px-2 py-1 text-xs text-ink-muted hover:border-mars hover:text-ink transition"
+        class="ml-auto flex flex-none items-center rounded-lg border border-surface-border bg-surface p-1.5 text-ink-muted"
         title="グローバルパラメータ設定"
         @click="emit('open-config')"
       >
         <Sliders class="h-3.5 w-3.5 text-mars" />
-        <span>設定</span>
       </button>
-    </div>
+    </template>
 
-    <!-- Parameter cards grid -->
-    <div class="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-      <div
-        v-for="param in activeParams"
-        :key="param.id"
-        class="group relative flex cursor-pointer flex-col justify-between rounded-xl border p-2.5 transition hover:brightness-110 active:scale-[0.98]"
-        :class="PARAM_META[param.id]?.bgColor || 'border-surface-border bg-surface'"
-        @click="openQuickEdit(param.id)"
-      >
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-1.5">
-            <component
-              :is="PARAM_META[param.id]?.icon || Globe"
-              class="h-4 w-4"
-              :class="PARAM_META[param.id]?.textColor || 'text-ink'"
-            />
-            <span class="text-xs font-semibold text-ink">
-              {{ PARAM_META[param.id]?.label || param.name }}
-            </span>
-          </div>
-          <span
-            v-if="param.current >= param.max"
-            class="rounded bg-emerald-500/20 px-1 text-[10px] font-bold text-emerald-400"
-          >
-            MAX
-          </span>
-        </div>
-
-        <div class="my-1.5 flex items-baseline justify-between">
-          <span class="font-display text-base font-bold text-ink">
-            {{ param.current }}{{ param.unit }}
-          </span>
-          <span class="text-[11px] text-ink-muted">
-            / {{ param.max }}{{ param.unit }}
-          </span>
-        </div>
-
-        <!-- Progress bar -->
-        <div class="h-1.5 w-full overflow-hidden rounded-full bg-surface-border/50">
-          <div
-            class="h-full rounded-full transition-all duration-300"
-            :class="PARAM_META[param.id]?.barColor || 'bg-mars'"
-            :style="{ width: `${getProgressPercent(param)}%` }"
-          />
-        </div>
-      </div>
-    </div>
-
-    <!-- Quick edit modal / popover -->
+    <!-- Quick edit modal / popover (compact/通常共通) -->
     <div
       v-if="selectedParam"
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm"
